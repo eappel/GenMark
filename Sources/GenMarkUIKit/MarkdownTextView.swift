@@ -28,6 +28,17 @@ public struct MarkdownTextView: UIViewRepresentable {
         uiView.attributedText = attributedText
         uiView.linkTextAttributes = [:] // keep style from attributed string
     }
+    
+    public func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        // Use the proposed width or fall back to a reasonable default
+        let width = proposal.width ?? UIScreen.main.bounds.width
+        
+        // Calculate the height needed for the text at this width
+        let size = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        
+        // Return the width from the proposal and calculated height
+        return CGSize(width: width, height: size.height)
+    }
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -76,6 +87,17 @@ public struct OpenURLMarkdownTextView: View {
         func updateUIView(_ uiView: UITextView, context: Context) {
             uiView.attributedText = attributedText
             uiView.linkTextAttributes = [:]
+        }
+        
+        func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+            // Use the proposed width or fall back to a reasonable default
+            let width = proposal.width ?? UIScreen.main.bounds.width
+            
+            // Calculate the height needed for the text at this width
+            let size = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+            
+            // Return the width from the proposal and calculated height
+            return CGSize(width: width, height: size.height)
         }
 
         final class Coordinator: NSObject, UITextViewDelegate {

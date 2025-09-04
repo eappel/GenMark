@@ -6,7 +6,9 @@
       "WebFetch(domain:docs.tuist.dev)",
       "Bash(tuist generate:*)",
       "Bash(tuist test:*)",
-      "Bash(xcodebuild:*)"
+      "Bash(xcodebuild:*)",
+      "Bash(grep:*)",
+      "Bash(swift:*)"
     ],
     "deny": [],
     "ask": []
