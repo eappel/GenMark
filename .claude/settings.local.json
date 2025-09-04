@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:tuist.dev)",
+      "WebSearch",
+      "WebFetch(domain:docs.tuist.dev)",
+      "Bash(tuist generate:*)",
+      "Bash(tuist test:*)",
+      "Bash(xcodebuild:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

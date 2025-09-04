@@ -3,22 +3,50 @@ import PackageDescription
 
 let package = Package(
     name: "GenMark",
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v18)
     ],
     products: [
-        .library(
-            name: "GenMark",
-            targets: ["GenMark"]
-        )
+        .library(name: "GenMarkCore", targets: ["GenMarkCore"]),
+        .library(name: "GenMarkUIKit", targets: ["GenMarkUIKit"]),
+        .library(name: "GenMarkUI", targets: ["GenMarkUI"]),
+    ],
+    dependencies: [
+        // Swift cmark fork with GFM products (cmark-gfm, cmark-gfm-extensions)
+        .package(url: "https://github.com/swiftlang/swift-cmark", branch: "release/5.7-gfm"),
     ],
     targets: [
         .target(
-            name: "GenMark",
-            path: "Sources/GenMark",
-            swiftSettings: [
-                .swiftLanguageMode(.v6)
+            name: "GenMarkCore",
+            dependencies: [
+                .product(name: "cmark-gfm", package: "swift-cmark"),
+                .product(name: "cmark-gfm-extensions", package: "swift-cmark")
+            ],
+            path: "Sources/GenMarkCore"
+        ),
+        .target(
+            name: "GenMarkUIKit",
+            dependencies: ["GenMarkCore"],
+            path: "Sources/GenMarkUIKit"
+        ),
+        .target(
+            name: "GenMarkUI",
+            dependencies: ["GenMarkCore", "GenMarkUIKit"],
+            path: "Sources/GenMarkUI",
+            resources: [
+                // Used by Previews to load sample fixtures visually
+                .process("Resources/Fixtures")
             ]
-        )
+        ),
+        .testTarget(
+            name: "GenMarkCoreTests",
+            dependencies: ["GenMarkCore"],
+            path: "Tests/GenMarkCoreTests",
+            resources: [
+                // Test-only copies of fixtures
+                .process("Fixtures")
+            ]
+        ),
     ]
 )

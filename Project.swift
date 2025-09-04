@@ -3,51 +3,109 @@ import ProjectDescription
 let project = Project(
     name: "GenMark",
     options: .options(
-        automaticSchemesOptions: .enabled()
+        automaticSchemesOptions: .enabled(
+            targetSchemesGrouping: .notGrouped,
+            codeCoverageEnabled: true,
+            testingOptions: []
+        )
+    ),
+    settings: .settings(
+        base: [
+            "SWIFT_VERSION": "6.0"
+        ]
     ),
     targets: [
-        // Library target (the SDK)
+        // MARK: Libraries mirroring SPM targets
         .target(
-            name: "GenMark",
-            destinations: [.iPhone, .iPad],
+            name: "GenMarkCore",
+            destinations: .iOS,
             product: .framework,
-            bundleId: "com.genmark",
+            bundleId: "com.genmark.core",
             deploymentTargets: .iOS("18.0"),
             infoPlist: .default,
-            sources: ["Sources/GenMark/**"],
+            sources: ["Sources/GenMarkCore/**"],
             resources: [],
-            dependencies: [],
-            settings: .settings(base: [
-                "SWIFT_VERSION": "6.0",
-                "CODE_SIGNING_ALLOWED": "NO",
-                "CODE_SIGN_IDENTITY": ""
-            ])
+            dependencies: [
+                // Link the GitHub Flavored Markdown products from swift-cmark
+                .external(name: "cmark-gfm"),
+                .external(name: "cmark-gfm-extensions")
+            ]
         ),
-        // Minimal example application to demo SDKView
+        .target(
+            name: "GenMarkUIKit",
+            destinations: .iOS,
+            product: .framework,
+            bundleId: "com.genmark.uikit",
+            deploymentTargets: .iOS("18.0"),
+            infoPlist: .default,
+            sources: ["Sources/GenMarkUIKit/**"],
+            resources: [],
+            dependencies: [
+                .target(name: "GenMarkCore")
+            ]
+        ),
+        .target(
+            name: "GenMarkUI",
+            destinations: .iOS,
+            product: .framework,
+            bundleId: "com.genmark.ui",
+            deploymentTargets: .iOS("18.0"),
+            infoPlist: .default,
+            sources: ["Sources/GenMarkUI/**"],
+            resources: ["Sources/GenMarkUI/Resources/**"],
+            dependencies: [
+                .target(name: "GenMarkCore"),
+                .target(name: "GenMarkUIKit")
+            ]
+        ),
+
+        // MARK: Example App
         .target(
             name: "GenMarkExample",
-            destinations: [.iPhone],
+            destinations: .iOS,
             product: .app,
             bundleId: "com.genmark.example",
             deploymentTargets: .iOS("18.0"),
             infoPlist: .extendingDefault(with: [
-                "UILaunchStoryboardName": "LaunchScreen"
+                "UILaunchScreen": [:]
             ]),
-            sources: ["Examples/GenMarkExample/**"],
+            sources: ["App/**"],
+            resources: ["App/Resources/**"],
+            dependencies: [
+                .target(name: "GenMarkUI")
+            ]
+        ),
+        // MARK: Unit Tests
+        .target(
+            name: "GenMarkCoreTests",
+            destinations: .iOS,
+            product: .unitTests,
+            bundleId: "com.genmark.coreTests",
+            deploymentTargets: .iOS("18.0"),
+            infoPlist: .default,
+            sources: ["Tests/GenMarkCoreTests/**"],
             resources: [
-                "Examples/GenMarkExample/Resources/**",
-                "Examples/GenMarkExample/Assets.xcassets"
+                "Tests/GenMarkCoreTests/Fixtures/**"
             ],
             dependencies: [
-                .target(name: "GenMark")
-            ],
-            settings: .settings(base: [
-                "SWIFT_VERSION": "6.0",
-                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
-                "CODE_SIGNING_ALLOWED": "NO",
-                "CODE_SIGN_IDENTITY": "",
-                "DEVELOPMENT_TEAM": ""
-            ])
+                .target(name: "GenMarkCore"),
+                .xctest
+            ]
+        )
+    ],
+    schemes: [
+        .scheme(
+            name: "Debug",
+            shared: true,
+            buildAction: .buildAction(targets: ["GenMarkCore", "GenMarkUI", "GenMarkUIKit", "GenMarkExample"]),
+            testAction: .targets(["GenMarkCoreTests"]),
+            runAction: .runAction(executable: "GenMarkExample")
+        ),
+        .scheme(
+            name: "Release",
+            shared: true,
+            buildAction: .buildAction(targets: ["GenMarkCore", "GenMarkUI", "GenMarkUIKit", "GenMarkExample"]),
+            runAction: .runAction(executable: "GenMarkExample")
         )
     ]
 )

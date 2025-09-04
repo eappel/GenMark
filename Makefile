@@ -1,45 +1,35 @@
-.PHONY: reload clean open build build-example
+.PHONY: reload clean build build-example test
 
 # Ensure a predictable shell
 SHELL := /bin/bash
 
-# Resolve TUIST command:
-# 1) Respect user-provided TUIST
-# 2) Use tuist on PATH if available
-# 3) Fallback to running via mise if available
-# 4) Otherwise, default to plain "tuist"
-ifndef TUIST
-TUIST := $(shell command -v tuist 2>/dev/null)
-ifeq ($(strip $(TUIST)),)
-  ifneq ($(shell command -v mise 2>/dev/null),)
-    TUIST := mise exec tuist@latest -- tuist
-  else
-    TUIST := tuist
-  endif
-endif
-endif
+# Resolve TUIST command (assume on PATH for simplicity)
+TUIST := tuist
+
+# Default iOS Simulator device name for tests
+DEST_SIM ?= iPhone 16
 
 reload:
 	@echo "[Make] Regenerating project via Tuist"
-	@$(TUIST) generate --no-open
+	@$(TUIST) generate"
 
 clean:
 	@echo "[Make] Installing Tuist dependencies and regenerating"
 	@$(TUIST) install
-	@$(TUIST) generate --no-open
-
-open:
-	@echo "[Make] Generating and opening the workspace via Tuist"
 	@$(TUIST) generate
 
-# Build the SDK (framework) only
-build:
-	@echo "[Make] Generating project and building GenMark SDK (iOS Simulator)"
-	@$(TUIST) generate --no-open
-	@xcodebuild -project GenMark.xcodeproj -scheme GenMark -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -configuration Debug build
+# Run unit tests using Tuist
+test:
+	@echo "[Make] Running unit tests via Tuist on $(DEST_SIM)"
+	@$(TUIST) test --configuration Debug -- -destination 'platform=iOS Simulator,name=$(DEST_SIM)' -parallel-testing-enabled YES
 
-# Build the iOS example app target using Tuist (without launching a simulator)
+# Build the SDK (framework) only via Tuist
+build:
+	@echo "[Make] Building GenMark SDK via Tuist"
+	@$(TUIST) build GenMark --configuration Debug
+
+# Build the iOS example app via Tuist
+
 build-example:
-	@echo "[Make] Generating project and building GenMarkExample (iOS Simulator)"
-	@$(TUIST) generate --no-open
-	@xcodebuild -project GenMark.xcodeproj -target GenMarkExample -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -configuration Debug build
+	@echo "[Make] Building GenMarkExample via Tuist"
+	@$(TUIST) build GenMarkExample --configuration Debug
