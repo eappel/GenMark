@@ -60,3 +60,19 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Tuist
+# Ignore Tuist local binary and generated dependencies/cache
+.tuist-bin/
+Tuist/Dependencies/
+Tuist/Cache/
+
+# Ignore Tuist generated Xcode projects/workspaces
+*.xcodeproj
+*.xcworkspace
+
+# Ignore Xcode DerivedData placed in repo root
+Derived/
+
+# Local build artifacts
+build/
