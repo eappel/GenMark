@@ -175,14 +175,25 @@ private struct CellRenderer: View {
             let baseFont = theme.textAttributes[.font] as? UIFont ?? UIFont.systemFont(ofSize: 16)
             let boldFont = boldFont(from: baseFont)
             let attr = factory.make(from: cell.inlines, baseFont: boldFont)
-            OpenURLMarkdownTextView(attributedText: attr)
-                .frame(maxWidth: .infinity, alignment: cellAlignment)
+            let mutable: NSAttributedString = {
+                let mutable = NSMutableAttributedString(attributedString: attr)
+                mutable.addAttribute(
+                    NSAttributedString.Key.paragraphStyle,
+                    value: {
+                        let mutableParagraphStyle = NSMutableParagraphStyle()
+                        mutableParagraphStyle.alignment = cellAlignment
+                        return mutableParagraphStyle
+                    }(),
+                    range: .init(location: 0, length: attr.length)
+                )
+                return mutable
+            }()
+            OpenURLMarkdownTextView(attributedText: mutable)
                 .border(.secondary)
         } else {
             // For regular cells, use default text attributes
             let attr = factory.make(from: cell.inlines)
             OpenURLMarkdownTextView(attributedText: attr)
-                .frame(maxWidth: .infinity, alignment: cellAlignment)
                 .border(.secondary)
         }
     }
@@ -196,11 +207,11 @@ private struct CellRenderer: View {
         return UIFont(descriptor: descriptor, size: font.pointSize)
     }
     
-    private var cellAlignment: Alignment {
+    private var cellAlignment: NSTextAlignment {
         switch cell.alignment {
-        case .left: return .leading
+        case .left: return .left
         case .center: return .center
-        case .right: return .trailing
+        case .right: return .right
         }
     }
 }
