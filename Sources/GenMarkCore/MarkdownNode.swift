@@ -24,7 +24,7 @@ public enum InlineNode: Equatable, Sendable {
     case softBreak
     case lineBreak
     case autolink(URL)
-    case footnoteReference(String)
+    // Note: HTML, highlight/mark and footnotes are not supported by swift-cmark
 }
 
 public enum ListKind: Equatable, Sendable {

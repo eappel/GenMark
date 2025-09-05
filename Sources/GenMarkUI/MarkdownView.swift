@@ -8,21 +8,45 @@ public struct MarkdownView: View {
     private let theme: MarkdownTheme
     private let style: MarkdownStyle
     private let overrides: MarkdownRenderOverrides
+    private let parserOptions: ParserOptions
+    private let extensions: Set<GFMExtension>
 
     public init(
         _ markdown: String,
         theme: MarkdownTheme = .systemDefault,
+        parserOptions: ParserOptions = [.smart, .validateUTF8],
+        extensions: Set<GFMExtension> = GFMExtension.all,
         @MarkdownStyleBuilder style: () -> MarkdownStyle = { .default },
         @MarkdownRendererBuilder renderers: () -> MarkdownRenderOverrides = { .empty }
     ) {
         self.markdown = markdown
         self.theme = theme
+        self.parserOptions = parserOptions
+        self.extensions = extensions
         self.style = style()
         self.overrides = renderers()
     }
+    
+    // Convenience initializer for minimal CommonMark parsing
+    public static func minimal(
+        _ markdown: String,
+        theme: MarkdownTheme = .systemDefault,
+        @MarkdownStyleBuilder style: () -> MarkdownStyle = { .default },
+        @MarkdownRendererBuilder renderers: () -> MarkdownRenderOverrides = { .empty }
+    ) -> MarkdownView {
+        return MarkdownView(
+            markdown,
+            theme: theme,
+            parserOptions: [],
+            extensions: [],
+            style: style,
+            renderers: renderers
+        )
+    }
 
     public var body: some View {
-        let doc = CMarkParser().parse(markdown: markdown)
+        let parser = CMarkParser(options: parserOptions, extensions: extensions)
+        let doc = parser.parse(markdown: markdown)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: theme.blockSpacing) {
                 ForEach(doc.blocks.indices, id: \.self) { i in
@@ -114,15 +138,19 @@ private struct BlockRenderer: View {
         case .thematicBreak:
             Rectangle().fill(Color(theme.separator)).frame(height: 1)
         case .table(let headers, let rows):
-            let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: max(headers.count, 1))
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(headers.indices, id: \.self) { i in
-                    CellRenderer(cell: headers[i], theme: theme).font(.headline)
+            let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: max(headers.count, 1))
+            LazyVGrid(columns: columns, spacing: 0) {
+                // Render headers with unique IDs
+                ForEach(Array(headers.enumerated()), id: \.0) { index, cell in
+                    CellRenderer(cell: cell, theme: theme)
+                        .font(.headline)
+                        .id("header-\(index)")
                 }
-                ForEach(rows.indices, id: \.self) { ri in
-                    let row = rows[ri]
-                    ForEach(row.indices, id: \.self) { ci in
-                        CellRenderer(cell: row[ci], theme: theme)
+                // Render all row cells with unique IDs combining row and column indices
+                ForEach(Array(rows.enumerated()), id: \.0) { rowIndex, row in
+                    ForEach(Array(row.enumerated()), id: \.0) { colIndex, cell in
+                        CellRenderer(cell: cell, theme: theme)
+                            .id("row-\(rowIndex)-col-\(colIndex)")
                     }
                 }
             }
@@ -141,5 +169,15 @@ private struct CellRenderer: View {
         let base = InlineTextStyle(font: theme.bodyFont, foreground: theme.foreground)
         let attr = AttributedTextFactory().make(from: cell.inlines, base: base)
         OpenURLMarkdownTextView(attributedText: attr)
+            .frame(maxWidth: .infinity, alignment: cellAlignment)
+            .border(.secondary)
+    }
+    
+    private var cellAlignment: Alignment {
+        switch cell.alignment {
+        case .left: return .leading
+        case .center: return .center
+        case .right: return .trailing
+        }
     }
 }

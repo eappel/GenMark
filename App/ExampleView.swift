@@ -1,7 +1,7 @@
 import SwiftUI
 import GenMarkUI
 
-struct ContentView: View {
+struct ExampleView: View {
     @State private var text: String = "# GenMark\n\nLoading fixture..."
 
     var body: some View {
@@ -12,6 +12,7 @@ struct ContentView: View {
                 .toolbar {
                     Menu("Fixture") {
                         Button("README") { loadFixture("fixture_readme") }
+                        Button("Parser Options") { loadFixture("fixture_parser_options") }
                         Button("Tables") { loadFixture("fixture_tables") }
                         Button("Long") { loadFixture("fixture_long") }
                         Button("Lists Test") { loadFixture("fixture_lists_test") }
@@ -35,5 +36,5 @@ struct ContentView: View {
 }
 
 struct ContentView_Previews: PreviewProvider {
-    static var previews: some View { ContentView() }
+    static var previews: some View { ExampleView() }
 }

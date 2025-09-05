@@ -4,12 +4,105 @@ public protocol MarkdownParsing: Sendable {
     func parse(markdown: String) -> MarkdownDocument
 }
 
+/// GitHub Flavored Markdown extensions that can be enabled
+/// These are the extensions available in swift-cmark (release/5.7-gfm)
+public enum GFMExtension: String, CaseIterable, Sendable {
+    /// Automatically detect and link URLs and email addresses
+    case autolink = "autolink"
+    
+    /// Support for ~~strikethrough~~ syntax
+    case strikethrough = "strikethrough"
+    
+    /// Filter potentially dangerous HTML tags
+    case tagfilter = "tagfilter"
+    
+    /// Support for task list items with checkboxes
+    case tasklist = "tasklist"
+    
+    /// Support for pipe tables
+    case table = "table"
+    
+    /// All available GFM extensions in swift-cmark
+    public static var all: Set<GFMExtension> {
+        Set(GFMExtension.allCases)
+    }
+    
+    /// Standard GFM extensions (same as all, since all are standard)
+    public static var standard: Set<GFMExtension> {
+        Set(GFMExtension.allCases)
+    }
+}
+
+/// Options for configuring the cmark-gfm parser behavior
+public struct ParserOptions: OptionSet, Sendable {
+    public let rawValue: Int32
+    
+    public init(rawValue: Int32) {
+        self.rawValue = rawValue
+    }
+    
+    /// Default options (no special behavior)
+    public static let `default` = ParserOptions([])
+    
+    /// Include source position data on block elements
+    public static let sourcePos = ParserOptions(rawValue: 1 << 1)
+    
+    /// Render soft breaks as hard line breaks
+    public static let hardBreaks = ParserOptions(rawValue: 1 << 2)
+    
+    /// Allow raw HTML and unsafe links (javascript:, data:, etc)
+    public static let unsafe = ParserOptions(rawValue: 1 << 17)
+    
+    /// Render soft breaks as spaces
+    public static let noBreaks = ParserOptions(rawValue: 1 << 4)
+    
+    /// Validate UTF-8 input, replacing invalid sequences with U+FFFD
+    public static let validateUTF8 = ParserOptions(rawValue: 1 << 9)
+    
+    /// Convert straight quotes to curly, --- to em dashes, -- to en dashes
+    public static let smart = ParserOptions(rawValue: 1 << 10)
+    
+    // GFM-specific options (commented for documentation, not all may be available)
+    // These would require additional implementation:
+    // - STRIKETHROUGH_DOUBLE_TILDE: Require exactly 2 tildes for strikethrough
+    // - TABLE_PREFER_STYLE_ATTRIBUTES: Use style attributes for table alignment
+    // - FULL_INFO_STRING: Include full info string in code blocks
+}
+
 public struct CMarkParser: MarkdownParsing, Sendable {
-    public init() {}
+    private let options: ParserOptions
+    private let enabledExtensions: Set<GFMExtension>
+    
+    /// Initialize parser with custom options and extensions
+    /// - Parameters:
+    ///   - options: Parser options to control parsing behavior. Default includes all useful options
+    ///   - extensions: GFM extensions to enable. Default includes all available extensions
+    public init(
+        options: ParserOptions = [.unsafe, .smart, .validateUTF8],
+        extensions: Set<GFMExtension> = GFMExtension.all
+    ) {
+        self.options = options
+        self.enabledExtensions = extensions
+    }
+    
+    /// Initializer for minimal parsing (CommonMark only, no extensions)
+    public static func minimal() -> CMarkParser {
+        return CMarkParser(options: [], extensions: [])
+    }
+    
+    /// Initializer for standard GitHub Flavored Markdown (without smart typography)
+    public static func standard() -> CMarkParser {
+        return CMarkParser(options: [.validateUTF8], extensions: GFMExtension.standard)
+    }
+    
+    /// Initializer for maximum compatibility (all features enabled)
+    public static func maximal() -> CMarkParser {
+        return CMarkParser(options: [.smart, .validateUTF8], extensions: GFMExtension.all)
+    }
 
     public func parse(markdown: String) -> MarkdownDocument {
         #if canImport(cmark_gfm)
-        return CMarkBridge().parse(markdown: markdown)
+        return CMarkBridge(options: options, extensions: enabledExtensions).parse(markdown: markdown)
         #else
         // Fallback: return a trivial paragraph so previews/tests can compile without cmark
         let placeholder: [BlockNode] = [
@@ -21,29 +114,53 @@ public struct CMarkParser: MarkdownParsing, Sendable {
 }
 
 #if canImport(cmark_gfm)
-@_implementationOnly import cmark_gfm
-@_implementationOnly import cmark_gfm_extensions
+import cmark_gfm
+import cmark_gfm_extensions
 
 private typealias UnsafeNode = UnsafeMutablePointer<cmark_node>
 
 private struct CMarkBridge {
+    let options: ParserOptions
+    let extensions: Set<GFMExtension>
+    
+    init(options: ParserOptions, extensions: Set<GFMExtension>) {
+        self.options = options
+        self.extensions = extensions
+    }
+    
     func parse(markdown: String) -> MarkdownDocument {
         // Register core GFM extensions and attach them to the parser
         cmark_gfm_core_extensions_ensure_registered()
-        let options = CMARK_OPT_DEFAULT
-        guard let parser = cmark_parser_new(options) else {
+        
+        // Convert our ParserOptions to cmark options
+        var cmarkOptions = CMARK_OPT_DEFAULT
+        if options.contains(.sourcePos) {
+            cmarkOptions |= CMARK_OPT_SOURCEPOS
+        }
+        if options.contains(.hardBreaks) {
+            cmarkOptions |= CMARK_OPT_HARDBREAKS
+        }
+        if options.contains(.unsafe) {
+            cmarkOptions |= CMARK_OPT_UNSAFE
+        }
+        if options.contains(.noBreaks) {
+            cmarkOptions |= CMARK_OPT_NOBREAKS
+        }
+        if options.contains(.validateUTF8) {
+            cmarkOptions |= CMARK_OPT_VALIDATE_UTF8
+        }
+        if options.contains(.smart) {
+            cmarkOptions |= CMARK_OPT_SMART
+        }
+        
+        guard let parser = cmark_parser_new(cmarkOptions) else {
             return MarkdownDocument(blocks: [.paragraph(inlines: [.text(markdown)])])
         }
         defer { cmark_parser_free(parser) }
 
-        // Attach commonly-used GitHub extensions
-        let extensionNames: [String]
-        if #available(iOS 18.0, *) {
-            extensionNames = ["autolink", "strikethrough", "tagfilter", "tasklist", "table"]
-        } else {
-            extensionNames = ["autolink", "strikethrough", "tagfilter", "tasklist"]
-        }
-        for name in extensionNames {
+        // Attach requested extensions
+        for gfmExtension in extensions {
+            let name = gfmExtension.rawValue
             if let ext = cmark_find_syntax_extension(name) {
                 cmark_parser_attach_syntax_extension(parser, ext)
             }
@@ -86,11 +203,18 @@ private struct CMarkBridge {
             }
             return .blockQuote(children: children)
         case CMARK_NODE_CODE_BLOCK:
-            let literal = stringOrEmpty(cmark_node_get_literal(node))
+            var literal = stringOrEmpty(cmark_node_get_literal(node))
+            // Remove trailing newline if present (cmark adds one)
+            if literal.hasSuffix("\n") {
+                literal.removeLast()
+            }
             let lang = stringOrNil(cmark_node_get_fence_info(node))
             return .codeBlock(language: lang, code: literal)
         case CMARK_NODE_THEMATIC_BREAK:
             return .thematicBreak
+        case CMARK_NODE_HTML_BLOCK:
+            // HTML blocks are not supported - skip them
+            return nil
         case CMARK_NODE_LIST:
             var items: [ListItem] = []
             var it: UnsafeNode? = cmark_node_first_child(node)
@@ -170,6 +294,10 @@ private struct CMarkBridge {
             return .softBreak
         case CMARK_NODE_LINEBREAK:
             return .lineBreak
+        case CMARK_NODE_HTML_INLINE:
+            // HTML inline is not supported - return as plain text
+            let html = stringOrEmpty(cmark_node_get_literal(node))
+            return .text(html)
         case CMARK_NODE_CODE:
             return .code(stringOrEmpty(cmark_node_get_literal(node)))
         case CMARK_NODE_LINK:
@@ -194,12 +322,17 @@ private struct CMarkBridge {
                 return .text(alt ?? urlString)
             }
         default:
-            // Strikethrough from GFM may not have a dedicated enum; check type string
-            if nodeTypeString(node) == "strikethrough" {
+            // Handle GFM extensions by checking type string
+            let typeStr = nodeTypeString(node)
+            switch typeStr {
+            case "strikethrough":
                 return .strikethrough(collectInlines(from: node))
+            default:
+                if let lit = stringOrNil(cmark_node_get_literal(node)) { 
+                    return .text(lit) 
+                }
+                return nil
             }
-            if let lit = stringOrNil(cmark_node_get_literal(node)) { return .text(lit) }
-            return nil
         }
     }
 

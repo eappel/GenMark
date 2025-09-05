@@ -16,7 +16,7 @@ public struct InlineTextStyle {
 
 public struct AttributedTextFactory {
     public init() {}
-
+    
     public func make(from inlines: [InlineNode], base: InlineTextStyle) -> NSAttributedString {
         let result = NSMutableAttributedString()
         for inline in inlines {
@@ -62,10 +62,6 @@ public struct AttributedTextFactory {
                 let range = NSRange(location: result.length, length: s.length)
                 result.append(s)
                 result.addAttribute(.link, value: url, range: range)
-            case .footnoteReference(let label):
-                result.append(NSAttributedString(string: "[", attributes: base.attributes))
-                result.append(NSAttributedString(string: label, attributes: base.attributes))
-                result.append(NSAttributedString(string: "]", attributes: base.attributes))
             }
         }
         return result

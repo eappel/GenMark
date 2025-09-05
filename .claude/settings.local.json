@@ -8,7 +8,14 @@
       "Bash(tuist test:*)",
       "Bash(xcodebuild:*)",
       "Bash(grep:*)",
-      "Bash(swift:*)"
+      "Bash(swift:*)",
+      "WebFetch(domain:github.github.com)",
+      "Bash(tuist build:*)",
+      "Bash(tuist clean:*)",
+      "Bash(tuist install:*)",
+      "Bash(xcrun simctl list:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

@@ -5,7 +5,7 @@ import GenMarkUI
 struct GenMarkExampleApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ExampleView()
         }
     }
 }

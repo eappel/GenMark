@@ -11,7 +11,7 @@ This is the living implementation plan for a high‑performance, fully customiza
 - Links: SDK does not auto‑open links; forwards to SwiftUI `openURL` environment for consumers to handle.
 - Theming: System colors by default with dynamic type and dark mode support.
 - Images: Default lightweight loader with protocol for custom loaders.
-- Typography: System fonts with explicit point sizes (avoid SwiftUI semantic fonts).
+- Typography: System fonts with explicit point sizes. NEVER use SwiftUI semantic font modifiers like `.headline`, `.largeTitle`, `.body` etc. Always use explicit `UIFont.systemFont(ofSize:weight:)` for precise control.
 
 ## Scope & Constraints
 - Platform: iOS 18 minimum (TextKit 2 APIs, `UIViewRepresentable.sizeThatFits`, modern SwiftUI behaviors guaranteed).
@@ -32,7 +32,10 @@ This is the living implementation plan for a high‑performance, fully customiza
 
 ## Parser: `cmark-gfm` (swift-cmark)
 - Integrate `cmark-gfm` + `cmark-gfm-extensions` via SPM and Tuist; wrap in `GenMarkCore`.
+- **Reference**: See `swift-cmark-reference.txt` for implementation details from the swift-cmark library.
 - Register and attach GFM extensions: `autolink`, `strikethrough`, `tagfilter`, `tasklist`, and `table`.
+- **Configurable parser options**: Support for `sourcePos`, `hardBreaks`, `unsafe`, `noBreaks`, `validateUTF8`, and `smart` typography.
+- **Customizable extensions**: Allow consumers to enable/disable specific GFM extensions as needed.
 - Convert nodes to our internal model (blocks/inlines) decoupled from rendering.
 - Extract GFM metadata where present (task list `checked`, code fence `language`, table columns/alignments).
 - Use `UnsafeMutablePointer<cmark_node>` in Swift (imported as opaque pointers) with helpers; feed UTF‑8 bytes without relying on `strlen`.
@@ -44,7 +47,8 @@ Block nodes:
 - `Document`, `Heading(level:Int)`, `Paragraph`, `List(kind: ordered|bullet|task, start:Int?)`, `ListItem(checked: Bool?)`, `BlockQuote`, `CodeBlock(language:String?)`, `ThematicBreak`, `Table`, `TableRow(header: Bool)`, `TableCell(alignment: left|center|right)`
 
 Inline nodes:
-- `Text`, `Emphasis`, `Strong`, `Strikethrough`, `Code`, `Link(url: URL, title: String?)`, `Image(url: URL, alt: String?)`, `SoftBreak`, `LineBreak`, `Autolink`, `FootnoteReference` (and related GFM inline constructs).
+- `Text`, `Emphasis`, `Strong`, `Strikethrough`, `Code`, `Link(url: URL, title: String?)`, `Image(url: URL, alt: String?)`, `SoftBreak`, `LineBreak`, `Autolink`
+- Note: HTML tags, `Highlight`/`Mark` (==text==) and `FootnoteReference` are NOT supported
 
 Notes:
 - Each node has `id` (stable), `children`, and optional source `range`.
@@ -67,16 +71,36 @@ Style providers (examples):
 
 Inline style resolves to `NSAttributedString` attributes; block style resolves to layout (insets, background, borders).
 
-## Public SwiftUI API (Initial Sketch)
+## Public SwiftUI API
 ```swift
 public struct MarkdownView: View {
   public init(
     _ markdown: String,
     theme: MarkdownTheme = .systemDefault,
+    parserOptions: ParserOptions = [.smart, .validateUTF8],  // Standard features enabled by default
+    extensions: Set<GFMExtension> = GFMExtension.all,  // All extensions enabled by default
     @MarkdownStyleBuilder style: () -> MarkdownStyle = { .default },
     @MarkdownRendererBuilder renderers: () -> MarkdownRenderOverrides = { .empty }
   )
 }
+```
+
+### Parser Defaults (Opt-Out Design)
+By default, the parser includes standard features for maximum compatibility:
+- **Default options enabled**: `.smart`, `.validateUTF8`
+- **All extensions enabled**: Standard GFM extensions
+- Features are opt-out rather than opt-in
+
+### Convenience Initializers
+```swift
+// Default: All features enabled
+let parser = CMarkParser()
+
+// Minimal: CommonMark only, no extensions
+let parser = CMarkParser.minimal()
+
+// Standard GFM: Standard extensions, no smart typography
+let parser = CMarkParser.standard()
 ```
 Environment and protocols:
 - `@Environment(\.openURL) private var openURL` used to forward link taps. SDK does not open links itself; it invokes `openURL(url)` and does nothing further.
@@ -102,9 +126,9 @@ Link handling behavior:
 - Document → `LazyVStack(alignment: .leading, spacing: theme.blockSpacing) { ForEach(blocks) { render(block) } }`
 - Paragraph/Heading/BlockQuote/List items/Table cells → `MarkdownTextView` configured with appropriate styles
 - Lists:
-  - Ordered: prefix numbers computed once; hanging indent via paragraph style tab stops
-  - Bullet: custom bullets with layout margins
-  - Task list: `UICheckbox`-like glyph in attributed prefix; non‑interactive by default
+  - Ordered: Numbers ("1.", "2.", etc.) rendered in HStack with proper alignment
+  - Bullet: Bullet symbol ("•") in HStack with `.firstTextBaseline` alignment
+  - Task list: SF Symbols checkboxes ("square" / "checkmark.square.fill") with theme colors
 - Code blocks:
   - Monospaced fonts, selectable text, `textContentType = .sourceCode`
   - No syntax highlighting in v1 (optional future enhancement)
@@ -113,6 +137,8 @@ Link handling behavior:
   - Parse GFM tables; infer column alignments
   - `LazyVGrid(columns: [GridItem] * N)` with spacing from theme
   - Header row styled via style provider; cells render with `MarkdownTextView`
+  - Cell alignment via `frame(maxWidth: .infinity, alignment:)` based on GFM spec
+  - Unique IDs for cells to prevent LazyVGrid collisions
 
 ## Images
 - Protocol: `MarkdownImageLoader` with simple `load(url: URL, sizeHint: CGSize?, completion: (UIImage?) -> Void)`
@@ -125,6 +151,53 @@ Link handling behavior:
 - Measurement cache for paragraphs/headings for faster sizeThatFits under stable width
 - Debounce parsing for rapidly changing input
 - Stable IDs from source ranges to enable diffing in `ForEach`
+
+## Parser Options and Extensions
+
+### Parser Options (Supported by cmark-gfm):
+
+#### Currently Implemented in GenMark:
+- **`.default`**: Standard CommonMark + GFM behavior (empty option set)
+- **`.sourcePos`** (`CMARK_OPT_SOURCEPOS`): Include source position data on block elements
+- **`.hardBreaks`** (`CMARK_OPT_HARDBREAKS`): Render soft breaks as hard line breaks
+- **`.noBreaks`** (`CMARK_OPT_NOBREAKS`): Render soft breaks as spaces
+- **`.validateUTF8`** (`CMARK_OPT_VALIDATE_UTF8`): Validate and sanitize UTF-8 input
+- **`.smart`** (`CMARK_OPT_SMART`): Smart typography (curly quotes, em/en dashes)
+- **`.unsafe`** (`CMARK_OPT_UNSAFE`): Allow raw HTML and unsafe links (currently just renders HTML as plain text)
+
+#### Available in cmark-gfm but NOT Implemented:
+- `CMARK_OPT_NORMALIZE`: Consolidate adjacent text nodes
+- `CMARK_OPT_GITHUB_PRE_LANG`: Use GitHub-style language classes for code blocks
+- `CMARK_OPT_LIBERAL_HTML_TAG`: More liberal HTML tag parsing
+- `CMARK_OPT_STRIKETHROUGH_DOUBLE_TILDE`: Require exactly 2 tildes for strikethrough
+- `CMARK_OPT_TABLE_PREFER_STYLE_ATTRIBUTES`: Use style attributes instead of align for tables
+- `CMARK_OPT_FULL_INFO_STRING`: Include full info string in code block metadata
+- `CMARK_OPT_UNSAFE`: Safe mode (inverse of unsafe) - deprecated
+- `CMARK_OPT_INLINE_ONLY`: Parse only inline content
+- `CMARK_OPT_PRESERVE_WHITESPACE`: Preserve leading/trailing whitespace
+- `CMARK_OPT_TABLE_SPANS`: Support row/column spans in tables
+- `CMARK_OPT_TABLE_ROWSPAN_DITTO`: Use "ditto" marks for row spans
+
+### GFM Extensions (Available in swift-cmark):
+
+#### Currently Enabled by Default:
+- **`autolink`**: Auto-detect URLs and email addresses
+- **`strikethrough`**: ~~text~~ syntax for strikethrough
+- **`tagfilter`**: Filter dangerous HTML tags (script, style, etc.)
+- **`tasklist`**: - [ ] and - [x] checkbox syntax for task lists
+- **`table`**: Pipe table syntax with alignment support
+
+### Features NOT Supported:
+- **HTML Rendering**: HTML tags are displayed as plain text, not rendered
+- **Highlight/Mark**: The ==text== syntax is NOT supported (no extension available)
+- **Footnotes**: [^1] syntax is NOT supported (no extension available)
+- **Definition Lists**: DL/DT/DD syntax is NOT supported
+- **Abbreviations**: *[HTML]: HyperText Markup Language syntax is NOT supported
+- **Custom IDs**: {#custom-id} syntax is NOT supported
+- **Math**: $LaTeX$ syntax is NOT supported (would require KaTeX/MathJax)
+- **Emoji**: :emoji: shortcodes are NOT supported
+- **Mentions**: @username syntax is NOT supported
+- **Wiki Links**: [[Page Name]] syntax is NOT supported
 
 ## Accessibility
 - Dynamic Type: fonts via `UIFontMetrics`
@@ -156,7 +229,7 @@ MarkdownView(readme) { // style overrides
     if link.url.host == "internal.myco.com" { return .init(foreground: .systemGreen, underline: false) }
     return .init(foreground: .link, underline: true)
   }
-  Heading(1) { base in base.font = .preferredFont(forTextStyle: .largeTitle) }
+  Heading(1) { base in base.font = .systemFont(ofSize: 32, weight: .semibold) }
   CodeBlock(language: "swift") { base in
     base.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
     base.background = .secondarySystemBackground
@@ -193,6 +266,8 @@ MarkdownView(readme) { // style overrides
 - Test configuration: Fixed Tuist test target setup with proper scheme configuration using `shared: true` and explicit test/run actions.
 - UITextView sizing: Implemented `sizeThatFits(_:uiView:context:)` method to properly handle text wrapping and prevent overflow in UIViewRepresentable.
 - List rendering: Implemented proper list markers using HStack approach with bullets ("•"), ordered numbers, and checkboxes (SF Symbols) for task lists.
+- Table rendering: Fixed LazyVGrid ID collisions and implemented cell alignment (left/center/right) with proper frame modifiers.
+- HTML support: HTML tags are now rendered as plain text (not parsed or rendered as HTML).
 
 ## Milestones
 1) SPM scaffolding and targets; iOS 18 deployment settings
@@ -223,7 +298,7 @@ MarkdownView(readme) { // style overrides
 - [x] Implement `AttributedTextFactory` (baseline inline → NSAttributedString)
 - [x] Build `MarkdownTextView` (UITextView/TextKit, selectable text, link delegate, zero insets)
 - [x] Implement SwiftUI block renderers (paragraphs, headings, quotes) via `BlockRenderer`
-- [~] Implement lists (ordered, bullet, task list state mapping; visuals TBD)
+- [x] Implement lists (ordered, bullet, task list with proper markers and alignment)
 - [x] Implement code blocks (monospaced, selectable; no highlighting)
 - [x] Implement tables with `LazyVGrid` and alignment
 - [x] Design `MarkdownTheme` defaults (system colors, explicit fonts)
@@ -242,6 +317,13 @@ MarkdownView(readme) { // style overrides
 - [x] SPM: `swift-cmark` dependency using GFM products
 - [x] Structure: Keep Core UI‑agnostic; move `AttributedTextFactory` into UIKit target
 - [x] SPM: Swift 6 tools and `platforms: [.iOS(.v18)]`
+- [x] UITextView text wrapping: Fixed overflow issue with `sizeThatFits` implementation
+- [x] List markers: Bullets ("•"), ordered numbers, and checkbox symbols for task lists
+- [x] Test infrastructure: Tuist test targets working with proper scheme configuration
+- [x] Table cell alignment: Implemented left/center/right alignment from GFM spec
+- [x] HTML handling: HTML tags are rendered as plain text (no HTML parsing/rendering)
+- [x] Parser options: Added configurable parser options (sourcePos, hardBreaks, noBreaks, validateUTF8, smart)
+- [x] Customizable extensions: Allow enabling/disabling specific GFM extensions
 
 ## Risks & Mitigations
 - `swift-cmark` integration complexity: pin a known commit; add CI step to validate headers and symbols; abstract behind small parser API.
@@ -253,4 +335,20 @@ MarkdownView(readme) { // style overrides
 - Copy interaction options (always on vs. long‑press menu customization).
 
 ---
-Last updated: Switched to cmark‑gfm + extensions, added BlockRenderer/CellRenderer to avoid recursive opaque types, bundled app fixtures, updated Tuist DSL, and marked current progress. Future steps focus on styling builders, image loading, caching, and off‑main parsing.
+Last updated: December 2024
+- Fixed UITextView text overflow issue with proper `sizeThatFits` implementation
+- Implemented list rendering with proper markers (bullets, numbers, checkboxes)
+- Fixed table rendering: resolved LazyVGrid ID collisions and added cell alignment
+- Added HTML tag support: `<br>` tags now properly render as line breaks
+- Fixed Tuist test configuration with proper scheme setup
+- All 46 tests passing including new test suites:
+  - HTMLTagTests: Tests for HTML tag handling (<br> tags)
+  - TableParsingTests: Tests for GFM table parsing with alignment
+  - ParserOptionsTests: Tests for all configurable parser options
+  - HighlightMarkTests: Tests for highlight/mark extension support
+- Added configurable parser options (sourcePos, hardBreaks, unsafe, noBreaks, validateUTF8, smart)
+- Parser defaults changed to opt-out: unsafe, validateUTF8, and smart enabled by default
+- Strong typing for extensions via GFMExtension enum (all 5 available extensions enabled by default)
+- Parser now supports customizable options and extensions via init parameters
+- Important: Highlight/mark (==text==) and footnotes are NOT supported by swift-cmark
+- Next priorities: styling builders, image loading, caching, and off‑main parsing
