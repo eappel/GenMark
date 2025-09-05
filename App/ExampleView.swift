@@ -6,18 +6,27 @@ struct ExampleView: View {
 
     var body: some View {
         NavigationView {
-            MarkdownView(text)
-                .navigationTitle("GenMark Preview")
-                .onAppear { loadFixture("fixture_readme") }
-                .toolbar {
-                    Menu("Fixture") {
-                        Button("README") { loadFixture("fixture_readme") }
-                        Button("Parser Options") { loadFixture("fixture_parser_options") }
-                        Button("Tables") { loadFixture("fixture_tables") }
-                        Button("Long") { loadFixture("fixture_long") }
-                        Button("Lists Test") { loadFixture("fixture_lists_test") }
-                    }
+            MarkdownView(
+                text,
+                customization: .block { node, theme in
+                    // Custom heading with gradient
+//                    if case .table(let headers, let rows) = node {
+//                        return AnyView(Rectangle().fill(.orange))
+//                    }
+                    return nil
                 }
+            )
+            .navigationTitle("GenMark Preview")
+            .onAppear { loadFixture("fixture_readme") }
+            .toolbar {
+                Menu("Fixture") {
+                    Button("README") { loadFixture("fixture_readme") }
+                    Button("Parser Options") { loadFixture("fixture_parser_options") }
+                    Button("Tables") { loadFixture("fixture_tables") }
+                    Button("Long") { loadFixture("fixture_long") }
+                    Button("Lists Test") { loadFixture("fixture_lists_test") }
+                }
+            }
         }
     }
 

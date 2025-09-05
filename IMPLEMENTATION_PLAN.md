@@ -54,22 +54,66 @@ Notes:
 - Each node has `id` (stable), `children`, and optional source `range`.
 - Node identity is hashed over type + range + textual content to enable memoization.
 
-## Styling & Overrides (Result Builders)
-Two complementary systems:
-- Theme (baseline): `MarkdownTheme` for defaults (fonts, sizes, spacing, colors from system dynamic colors).
-- Runtime overrides: `MarkdownStyle` and `MarkdownRenderOverrides` built with result builders.
+## Styling & Customization System
+Two complementary systems for maximum flexibility:
+- **Theme (baseline)**: `MarkdownTheme` using `NSAttributedString.Key` dictionaries for complete transparency in attribute construction
+- **Runtime customization**: `MarkdownCustomization` with closure-based inline and block overrides
 
-Result builders:
-- `@MarkdownStyleBuilder` composes per‑node style providers.
-- `@MarkdownRendererBuilder` composes component overrides (replace default renderer for a node type/predicate).
+### Theme Architecture (NSAttributedString.Key Dictionaries)
+The theme system uses attribute dictionaries directly for transparent and traceable styling:
+```swift
+public struct MarkdownTheme: @unchecked Sendable {
+    // Base text attributes using NSAttributedString.Key dictionaries
+    public var textAttributes: [NSAttributedString.Key: Any]
+    public var h1Attributes: [NSAttributedString.Key: Any]
+    public var codeAttributes: [NSAttributedString.Key: Any]
+    public var linkAttributes: [NSAttributedString.Key: Any]
+    // ... other attribute dictionaries
+}
+```
 
-Style providers (examples):
-- `InlineStyle(.emphasis) { context in InlineTextStyle(...) }`
-- `InlineStyle(.link) { (link: LinkNode, env) in InlineTextStyle(...) } // can branch by destination`
-- `BlockStyle(.heading(1)) { BlockStyle(margins:..., background:...) }`
-- `ImageStyle { (image: ImageNode) in ImagePresentation(...) }`
+### Runtime Customization System
+Simple closure-based system for node appearance overrides:
+```swift
+public struct MarkdownCustomization: Sendable {
+    // Inline node customization - modifies NSAttributedString attributes
+    public let inlineCustomizer: @Sendable (InlineNode, [NSAttributedString.Key: Any]) -> [NSAttributedString.Key: Any]?
+    
+    // Block node customization - returns custom SwiftUI views
+    public let blockCustomizer: @Sendable (BlockNode, MarkdownTheme) -> AnyView?
+}
+```
 
-Inline style resolves to `NSAttributedString` attributes; block style resolves to layout (insets, background, borders).
+### Customization Examples:
+```swift
+// Inline customization - modify text attributes
+.inline { node, attrs in
+    if case .code = node {
+        var newAttrs = attrs
+        newAttrs[.foregroundColor] = UIColor.systemGreen
+        newAttrs[.backgroundColor] = UIColor.systemGreen.withAlphaComponent(0.1)
+        return newAttrs
+    }
+    return nil
+}
+
+// Block customization - replace entire block rendering
+.block { node, theme in
+    if case .blockQuote(_) = node {
+        return AnyView(CustomBlockQuoteView())
+    }
+    return nil
+}
+
+// Combined customizations
+MarkdownCustomization.combine(inlineCustomizer, blockCustomizer)
+```
+
+**Benefits of Dictionary-Based Approach:**
+- **Complete transparency**: Easy to trace how attributed strings are constructed
+- **Direct control**: No hidden conversions or intermediate abstractions  
+- **Simple merging**: Straightforward attribute dictionary operations
+- **UIKit compatibility**: Native NSAttributedString.Key usage throughout
 
 ## Public SwiftUI API
 ```swift
@@ -77,11 +121,17 @@ public struct MarkdownView: View {
   public init(
     _ markdown: String,
     theme: MarkdownTheme = .systemDefault,
+    customization: MarkdownCustomization = .none,
     parserOptions: ParserOptions = [.smart, .validateUTF8],  // Standard features enabled by default
-    extensions: Set<GFMExtension> = GFMExtension.all,  // All extensions enabled by default
-    @MarkdownStyleBuilder style: () -> MarkdownStyle = { .default },
-    @MarkdownRendererBuilder renderers: () -> MarkdownRenderOverrides = { .empty }
+    extensions: Set<GFMExtension> = GFMExtension.all  // All extensions enabled by default
   )
+  
+  // Convenience minimal CommonMark parsing
+  public static func minimal(
+    _ markdown: String,
+    theme: MarkdownTheme = .systemDefault,
+    customization: MarkdownCustomization = .none
+  ) -> MarkdownView
 }
 ```
 
@@ -224,22 +274,39 @@ Link handling behavior:
 
 ## Example Usage
 ```swift
-MarkdownView(readme) { // style overrides
-  Link { link in
-    if link.url.host == "internal.myco.com" { return .init(foreground: .systemGreen, underline: false) }
-    return .init(foreground: .link, underline: true)
-  }
-  Heading(1) { base in base.font = .systemFont(ofSize: 32, weight: .semibold) }
-  CodeBlock(language: "swift") { base in
-    base.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
-    base.background = .secondarySystemBackground
-  }
-}
-.environment(\.markdownImageLoader, .default)
-// Consumers handle links
+// Simple usage with defaults
+MarkdownView(markdownContent)
+
+// With custom theme
+MarkdownView(markdownContent, theme: .systemDefault)
+
+// With customization
+MarkdownView(
+    markdownContent,
+    customization: .combine(
+        .inline { node, attrs in
+            // Custom link styling by destination
+            if case .link(let url, _, _) = node, url.host == "internal.myco.com" {
+                var newAttrs = attrs
+                newAttrs[.foregroundColor] = UIColor.systemGreen
+                newAttrs[.underlineStyle] = nil
+                return newAttrs
+            }
+            return nil
+        },
+        .block { node, theme in
+            // Custom heading rendering
+            if case .heading(1, _) = node {
+                return AnyView(CustomGradientHeading(node: node, theme: theme))
+            }
+            return nil
+        }
+    )
+)
+// Consumers handle links via SwiftUI environment
 .environment(\.openURL, OpenURLAction { url in
-  // Route URL or present sheet; return .handled / .discarded
-  return .handled
+    // Custom link handling logic
+    return .handled
 })
 ```
 
@@ -247,14 +314,15 @@ MarkdownView(readme) { // style overrides
 - `GenMarkCore`
   - `CMarkParser` wrapper (cmark-gfm with extensions)
   - Node model, transforms, caching keys
-  - `AttributedTextFactory` (inline → NSAttributedString)
 - `GenMarkUIKit`
+  - `MarkdownTheme` (NSAttributedString.Key dictionary-based theming)
+  - `MarkdownCustomization` (inline and block customization closures)
+  - `AttributedTextFactory` (inline → NSAttributedString with transparent attribute merging)
   - `MarkdownTextView` (UIViewRepresentable)
   - TextKit helpers and measurement cache
 - `GenMarkUI`
   - `MarkdownView` (SwiftUI facade)
   - Block renderers (paragraphs, headings, lists, quotes, code, tables, hr). Uses concrete `BlockRenderer`/`CellRenderer` views to avoid recursive opaque type issues.
-  - Styling system: theme, result builders, overrides
   - Image view + loader environment
 
 ## Recent Decisions & Progress
@@ -302,8 +370,8 @@ MarkdownView(readme) { // style overrides
 - [x] Implement code blocks (monospaced, selectable; no highlighting)
 - [x] Implement tables with `LazyVGrid` and alignment
 - [x] Design `MarkdownTheme` defaults (system colors, explicit fonts)
-- [ ] Implement `@MarkdownStyleBuilder` and style resolution (stubs exist)
-- [ ] Implement `@MarkdownRendererBuilder` for component overrides (stubs exist)
+- [x] Implement customization system with transparent NSAttributedString.Key dictionaries
+- [x] Replace TextStyle abstraction with direct attribute dictionary operations
 - [x] Integrate `@Environment(\.openURL)` for link taps via UITextView bridge
 - [ ] Define `MarkdownImageLoader` protocol and default lightweight loader (URLSession + NSCache)
 - [ ] Add parse and attributed string caches (keys include trait collection)
@@ -351,4 +419,10 @@ Last updated: December 2024
 - Strong typing for extensions via GFMExtension enum (all 5 available extensions enabled by default)
 - Parser now supports customizable options and extensions via init parameters
 - Important: Highlight/mark (==text==) and footnotes are NOT supported by swift-cmark
-- Next priorities: styling builders, image loading, caching, and off‑main parsing
+- **Styling System Refactored**: Replaced complex result-builder system with simple dictionary-based approach:
+  - `MarkdownTheme` now uses NSAttributedString.Key dictionaries directly for complete transparency
+  - `MarkdownCustomization` provides closure-based inline and block overrides
+  - Removed intermediate TextStyle abstraction for direct attribute manipulation
+  - All font modifications use proper UIFontDescriptor trait combining
+  - Theme marked `@unchecked Sendable` for thread safety with documented constraints
+- Next priorities: image loading, caching, and off‑main parsing
