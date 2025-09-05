@@ -37,6 +37,24 @@ public struct MarkdownView: View {
 private struct BlockRenderer: View {
     let node: BlockNode
     let theme: MarkdownTheme
+    
+    @ViewBuilder
+    private func listMarker(for kind: ListKind, index: Int, checked: Bool?, theme: MarkdownTheme) -> some View {
+        switch kind {
+        case .bullet:
+            Text("•")
+                .font(.system(size: theme.bodyFont.pointSize))
+                .foregroundColor(Color(theme.foreground))
+        case .ordered(let start):
+            Text("\(start + index).")
+                .font(.system(size: theme.bodyFont.pointSize))
+                .foregroundColor(Color(theme.foreground))
+        case .task:
+            Image(systemName: checked == true ? "checkmark.square.fill" : "square")
+                .foregroundColor(Color(checked == true ? theme.link : theme.foreground))
+                .imageScale(.medium)
+        }
+    }
 
     var body: some View {
         switch node {
@@ -66,13 +84,20 @@ private struct BlockRenderer: View {
             }
             .padding(.leading, 8)
             .overlay(alignment: .leading) { Rectangle().fill(Color(theme.separator)).frame(width: 2) }
-        case .list(_, let items):
+        case .list(let kind, let items):
             VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
                 ForEach(items.indices, id: \.self) { idx in
                     let item = items[idx]
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(item.children.indices, id: \.self) { j in
-                            BlockRenderer(node: item.children[j], theme: theme)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        // Render the list marker
+                        listMarker(for: kind, index: idx, checked: item.checked, theme: theme)
+                            .frame(minWidth: 20, alignment: .trailing)
+                        
+                        // Render the item content
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(item.children.indices, id: \.self) { j in
+                                BlockRenderer(node: item.children[j], theme: theme)
+                            }
                         }
                     }
                 }

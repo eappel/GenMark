@@ -190,6 +190,9 @@ MarkdownView(readme) { // style overrides
 - Targets/tooling: iOS 18 minimum and Swift 6; Tuist manifest updated to current DSL (`destinations`, `deploymentTargets`). Makefile builds via `tuist build`.
 - Example app resources: fixtures are bundled under `App/Resources/Fixtures` and loaded via `Bundle.main`.
 - Tests: added a Tuist unit‑test target mirroring SPM tests; added a small shim so `Bundle.module` pathing works under Tuist.
+- Test configuration: Fixed Tuist test target setup with proper scheme configuration using `shared: true` and explicit test/run actions.
+- UITextView sizing: Implemented `sizeThatFits(_:uiView:context:)` method to properly handle text wrapping and prevent overflow in UIViewRepresentable.
+- List rendering: Implemented proper list markers using HStack approach with bullets ("•"), ordered numbers, and checkboxes (SF Symbols) for task lists.
 
 ## Milestones
 1) SPM scaffolding and targets; iOS 18 deployment settings

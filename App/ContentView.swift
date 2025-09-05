@@ -14,6 +14,7 @@ struct ContentView: View {
                         Button("README") { loadFixture("fixture_readme") }
                         Button("Tables") { loadFixture("fixture_tables") }
                         Button("Long") { loadFixture("fixture_long") }
+                        Button("Lists Test") { loadFixture("fixture_lists_test") }
                     }
                 }
         }
