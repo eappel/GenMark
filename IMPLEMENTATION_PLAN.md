@@ -3,15 +3,16 @@
 This is the living implementation plan for a high‑performance, fully customizable GitHub‑Flavored Markdown (GFM) renderer for SwiftUI with UIKit/UITextView under the hood. We will continuously update this document as we build.
 
 ## Goals
-- Performance: off‑main parsing, lazy block rendering, UITextView (TextKit) for long rich text.
-- Completeness: Full GFM feature set (tables, task lists, strikethrough, autolinks, footnotes, etc.).
-- Customization: Result‑builder driven styling and component overrides at runtime; per‑node and per‑attribute control (e.g., link by destination).
-- Integration: SwiftUI wrapper, mix UIKit via `UIViewRepresentable` where needed, tables via `LazyVGrid`.
-- Selection: Selectable text globally (headings, paragraphs, lists, table cells, code blocks).
-- Links: SDK does not auto‑open links; forwards to SwiftUI `openURL` environment for consumers to handle.
-- Theming: System colors by default with dynamic type and dark mode support.
-- Images: Default lightweight loader with protocol for custom loaders.
-- Typography: System fonts with explicit point sizes. NEVER use SwiftUI semantic font modifiers like `.headline`, `.largeTitle`, `.body` etc. Always use explicit `UIFont.systemFont(ofSize:weight:)` for precise control.
+- **Performance**: off‑main parsing, lazy block rendering, UITextView (TextKit) for long rich text.
+- **Streaming LLM Support**: Optimized for rendering streaming responses from Large Language Models with frequent content updates. Critical requirement: update UITextViews in-place rather than destroying and recreating views to maintain smooth streaming performance.
+- **Completeness**: Full GFM feature set (tables, task lists, strikethrough, autolinks, footnotes, etc.).
+- **Customization**: Result‑builder driven styling and component overrides at runtime; per‑node and per‑attribute control (e.g., link by destination).
+- **Integration**: SwiftUI wrapper, mix UIKit via `UIViewRepresentable` where needed, tables via `LazyVGrid`.
+- **Selection**: Selectable text globally (headings, paragraphs, lists, table cells, code blocks).
+- **Links**: SDK does not auto‑open links; forwards to SwiftUI `openURL` environment for consumers to handle.
+- **Theming**: System colors by default with dynamic type and dark mode support.
+- **Images**: Default lightweight loader with protocol for custom loaders.
+- **Typography**: System fonts with explicit point sizes. NEVER use SwiftUI semantic font modifiers like `.headline`, `.largeTitle`, `.body` etc. Always use explicit `UIFont.systemFont(ofSize:weight:)` for precise control.
 
 ## Scope & Constraints
 - Platform: iOS 18 minimum (TextKit 2 APIs, `UIViewRepresentable.sizeThatFits`, modern SwiftUI behaviors guaranteed).
@@ -161,16 +162,29 @@ Link handling behavior:
 - When a link is tapped in `UITextView`, delegate calls `openURL(url)`. If consumer hasn’t provided a handler, system may decide; we do not force opening.
 
 ## UIKit/TextKit Bridge
-- `MarkdownTextView: UIViewRepresentable` that hosts a `UITextView` with TextKit stack:
-  - `NSTextStorage`, `NSLayoutManager`, `NSTextContainer`
-- Configuration:
-  - `isEditable = false`, `isScrollEnabled = false`, `isSelectable = true` (global selection requirement)
-  - `textDragInteraction?.isEnabled = true` where applicable (copy support)
-  - Zero text container insets and line fragment padding to align with SwiftUI layout
-  - Link interaction via delegate `textView(_:shouldInteractWith:in:interaction:)` forwarding to `openURL`
-  - `preferredMaxLayoutWidth` style measurement via `sizeThatFits`/`intrinsicContentSize`; adopt `UIViewRepresentable.sizeThatFits(_:)` on iOS 18
-- Attributed text generation via `AttributedTextFactory` from inline node subtrees
-- Reuse TextKit objects where possible; avoid reallocating managers on `updateUIView`
+
+### MarkdownTextView: UIViewRepresentable
+Hosts a `UITextView` with TextKit stack optimized for streaming content updates:
+- TextKit components: `NSTextStorage`, `NSLayoutManager`, `NSTextContainer`
+
+### Configuration
+- `isEditable = false`, `isScrollEnabled = false`, `isSelectable = true` (global selection requirement)
+- `textDragInteraction?.isEnabled = true` where applicable (copy support)  
+- Zero text container insets and line fragment padding to align with SwiftUI layout
+- Link interaction via delegate `textView(_:shouldInteractWith:in:interaction:)` forwarding to `openURL`
+- `preferredMaxLayoutWidth` style measurement via `sizeThatFits`/`intrinsicContentSize`; adopt `UIViewRepresentable.sizeThatFits(_:)` on iOS 18
+
+### Streaming Performance Optimizations
+- **UITextView persistence**: Maintain the same UITextView instance across content updates to preserve selection state and avoid re-layout costs
+- **TextKit object reuse**: Never reallocate `NSLayoutManager` or `NSTextContainer` on `updateUIView`
+- **Attributed text updates**: Use efficient `NSMutableAttributedString` operations when possible instead of full `attributedText` replacement
+- **Selection preservation**: Maintain cursor position and text selection during streaming updates where appropriate
+- **Layout stability**: Minimize layout thrashing by batching attribute changes and avoiding unnecessary `invalidateIntrinsicContentSize` calls
+
+### AttributedText Generation
+- Generate attributed text via `AttributedTextFactory` from inline node subtrees
+- Cache attributed strings per node identity to avoid regenerating unchanged content
+- Support incremental updates for append-only streaming scenarios
 
 ## Rendering Blocks
 - Document → `LazyVStack(alignment: .leading, spacing: theme.blockSpacing) { ForEach(blocks) { render(block) } }`
@@ -196,11 +210,26 @@ Link handling behavior:
 - SwiftUI wrapper view chooses loader from environment; renders placeholder and respects alt text for accessibility
 
 ## Caching & Performance
-- Parse cache: cache `MarkdownNode` tree keyed by input content hash
-- Attributed string cache: key on inline subtree identity + style signature + UITraitCollection
-- Measurement cache for paragraphs/headings for faster sizeThatFits under stable width
-- Debounce parsing for rapidly changing input
-- Stable IDs from source ranges to enable diffing in `ForEach`
+
+### Streaming LLM Optimization Strategy
+**Critical for LLM streaming performance**: GenMark must excel at handling frequently changing markdown content without creating visual jank or performance degradation.
+
+#### View Lifecycle Management
+- **UITextView Reuse**: Never destroy and recreate UITextView instances during content updates. Always update `attributedText` in-place via `updateUIView(_:context:)`.
+- **SwiftUI Identity Preservation**: Use stable IDs based on node structure rather than content to prevent SwiftUI from destroying and recreating view hierarchies.
+- **Incremental Updates**: When possible, detect and apply minimal diffs to attributed strings rather than full replacement.
+
+#### Performance Caches
+- **Parse cache**: Cache `MarkdownNode` tree keyed by input content hash with LRU eviction
+- **Attributed string cache**: Key on inline subtree identity + style signature + UITraitCollection  
+- **Measurement cache**: Cache paragraph/heading measurements for faster `sizeThatFits` under stable width
+- **Node identity cache**: Stable IDs from content structure (not byte ranges) to enable efficient diffing
+
+#### Streaming-Specific Optimizations
+- **Debounced parsing**: Coalesce rapid content changes with configurable debounce interval (default ~16ms for 60fps)
+- **Partial invalidation**: When content changes, only re-parse and re-render affected subtrees
+- **Background parsing**: Parse new content off-main thread while maintaining current render until ready
+- **Smooth transitions**: Avoid visible flicker during content updates by maintaining view references
 
 ## Parser Options and Extensions
 
@@ -374,8 +403,11 @@ MarkdownView(
 - [x] Replace TextStyle abstraction with direct attribute dictionary operations
 - [x] Integrate `@Environment(\.openURL)` for link taps via UITextView bridge
 - [ ] Define `MarkdownImageLoader` protocol and default lightweight loader (URLSession + NSCache)
-- [ ] Add parse and attributed string caches (keys include trait collection)
+- [ ] Add parse and attributed string caches (keys include trait collection) with LLM streaming optimizations
 - [ ] Add measurement cache for paragraphs/headings
+- [ ] Implement incremental content diffing for streaming updates
+- [ ] Add debounced parsing for high-frequency content changes
+- [ ] Optimize UITextView reuse and in-place updates for streaming performance
 - [ ] Accessibility review (VoiceOver, Dynamic Type, contrast)
 - [ ] Performance profiling on large README.md and table‑heavy docs
 - [ ] Documentation: Quick start, theming, overrides, performance tips
@@ -425,4 +457,9 @@ Last updated: December 2024
   - Removed intermediate TextStyle abstraction for direct attribute manipulation
   - All font modifications use proper UIFontDescriptor trait combining
   - Theme marked `@unchecked Sendable` for thread safety with documented constraints
-- Next priorities: image loading, caching, and off‑main parsing
+- **LLM Streaming Requirements**: Added critical performance requirements for streaming LLM responses:
+  - UITextView in-place updates to avoid destroying and recreating views
+  - Stable view identity preservation during frequent content changes
+  - Debounced parsing and incremental update strategies
+  - Background parsing with smooth transition handling
+- Next priorities: streaming performance optimizations, caching, and incremental diffing
