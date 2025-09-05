@@ -189,11 +189,13 @@ private struct CellRenderer: View {
                 return mutable
             }()
             OpenURLMarkdownTextView(attributedText: mutable)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .border(.secondary)
         } else {
             // For regular cells, use default text attributes
             let attr = factory.make(from: cell.inlines)
             OpenURLMarkdownTextView(attributedText: attr)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .border(.secondary)
         }
     }
