@@ -1,6 +1,5 @@
 import SwiftUI
 import GenMarkUI
-import GenMarkUIKit
 import GenMarkCore
 
 // Helper extension to extract inline content from block nodes

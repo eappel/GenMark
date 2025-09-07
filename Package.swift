@@ -9,7 +9,6 @@ let package = Package(
     ],
     products: [
         .library(name: "GenMarkCore", targets: ["GenMarkCore"]),
-        .library(name: "GenMarkUIKit", targets: ["GenMarkUIKit"]),
         .library(name: "GenMarkUI", targets: ["GenMarkUI"]),
     ],
     dependencies: [
@@ -26,13 +25,8 @@ let package = Package(
             path: "Sources/GenMarkCore"
         ),
         .target(
-            name: "GenMarkUIKit",
-            dependencies: ["GenMarkCore"],
-            path: "Sources/GenMarkUIKit"
-        ),
-        .target(
             name: "GenMarkUI",
-            dependencies: ["GenMarkCore", "GenMarkUIKit"],
+            dependencies: ["GenMarkCore"],
             path: "Sources/GenMarkUI",
             resources: [
                 // Used by Previews to load sample fixtures visually

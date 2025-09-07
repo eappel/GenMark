@@ -32,30 +32,16 @@ let project = Project(
             ]
         ),
         .target(
-            name: "GenMarkUIKit",
-            destinations: .iOS,
-            product: .framework,
-            bundleId: "com.genmark.uikit",
-            deploymentTargets: .iOS("18.0"),
-            infoPlist: .default,
-            sources: ["Sources/GenMarkUIKit/**"],
-            resources: [],
-            dependencies: [
-                .target(name: "GenMarkCore")
-            ]
-        ),
-        .target(
             name: "GenMarkUI",
             destinations: .iOS,
             product: .framework,
             bundleId: "com.genmark.ui",
             deploymentTargets: .iOS("18.0"),
             infoPlist: .default,
-            sources: ["Sources/GenMarkUI/**"],
+            sources: ["Sources/GenMarkUI/Sources/**"],
             resources: ["Sources/GenMarkUI/Resources/**"],
             dependencies: [
-                .target(name: "GenMarkCore"),
-                .target(name: "GenMarkUIKit")
+                .target(name: "GenMarkCore")
             ]
         ),
 
@@ -69,7 +55,7 @@ let project = Project(
             infoPlist: .extendingDefault(with: [
                 "UILaunchScreen": [:]
             ]),
-            sources: ["App/**"],
+            sources: ["App/Sources/**"],
             resources: ["App/Resources/**"],
             dependencies: [
                 .target(name: "GenMarkUI")
@@ -83,7 +69,7 @@ let project = Project(
             bundleId: "com.genmark.coreTests",
             deploymentTargets: .iOS("18.0"),
             infoPlist: .default,
-            sources: ["Tests/GenMarkCoreTests/**"],
+            sources: ["Tests/GenMarkCoreTests/Tests/**"],
             resources: [
                 "Tests/GenMarkCoreTests/Fixtures/**"
             ],
@@ -98,14 +84,14 @@ let project = Project(
         .scheme(
             name: "Debug",
             shared: true,
-            buildAction: .buildAction(targets: ["GenMarkCore", "GenMarkUI", "GenMarkUIKit", "GenMarkExample", "GenMarkCoreTests"]),
+            buildAction: .buildAction(targets: ["GenMarkCore", "GenMarkUI", "GenMarkExample", "GenMarkCoreTests"]),
             testAction: .targets(["GenMarkCoreTests"]),
             runAction: .runAction(executable: "GenMarkExample")
         ),
         .scheme(
             name: "Release",
             shared: true,
-            buildAction: .buildAction(targets: ["GenMarkCore", "GenMarkUI", "GenMarkUIKit", "GenMarkExample"]),
+            buildAction: .buildAction(targets: ["GenMarkCore", "GenMarkUI", "GenMarkExample"]),
             runAction: .runAction(executable: "GenMarkExample")
         )
     ]

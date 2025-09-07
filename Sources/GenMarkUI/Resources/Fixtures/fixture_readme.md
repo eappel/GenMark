@@ -6,13 +6,14 @@
 
 ## Lists
 
-- Bullet one
-- Bullet two with a [link](https://example.com) and <https://apple.com>
 - [ ] Task unchecked
 - [x] Task checked
 
 1. Ordered one
 2. Ordered two with `code`
+
+- Bullet one
+- Bullet two with a [link](https://example.com) and <https://apple.com>
 
 ## Table
 

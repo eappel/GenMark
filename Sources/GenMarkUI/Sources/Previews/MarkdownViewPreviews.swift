@@ -22,7 +22,10 @@ struct MarkdownViewPreviews: PreviewProvider {
         }
 
         private func load() {
-            if let url = Bundle.module.url(forResource: resource, withExtension: "md", subdirectory: "Resources/Fixtures") {
+            if let url = Bundle.module.url(
+                forResource: resource,
+                withExtension: "md"
+            ) {
                 if let s = try? String(contentsOf: url, encoding: .utf8) {
                     text = s
                     return

@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 import GenMarkCore
-import GenMarkUIKit
 
 public struct MarkdownView: View {
     private let markdown: String
