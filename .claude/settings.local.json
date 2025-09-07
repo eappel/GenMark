@@ -17,7 +17,8 @@
       "WebFetch(domain:github.com)",
       "Bash(find:*)",
       "WebFetch(domain:wiki.c2.com)",
-      "WebFetch(domain:en.wikipedia.org)"
+      "WebFetch(domain:en.wikipedia.org)",
+      "Bash(tuist:*)"
     ],
     "deny": [],
     "ask": []

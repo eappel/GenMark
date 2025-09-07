@@ -26,10 +26,10 @@ clean:
 	@$(TUIST) install
 	@$(TUIST) generate
 
-# Run unit tests using Tuist
+# Run unit tests using Tuist  
 test:
 	@echo "[Make] Running unit tests via Tuist on $(DEST_SIM)"
-	@$(TUIST) test --configuration Debug -- -destination 'platform=iOS Simulator,name=$(DEST_SIM),OS=$(DEST_OS)' -parallel-testing-enabled YES
+	@$(TUIST) test --no-selective-testing --configuration Debug -- -destination 'platform=iOS Simulator,name=$(DEST_SIM),OS=$(DEST_OS)' -parallel-testing-enabled YES
 
 # Build the SDK (framework) only via Tuist
 build:
@@ -43,7 +43,7 @@ TEST_LOG ?= test-output.txt
 test-debug:
 	@echo "[Make] Running unit tests via Tuist on $(DEST_SIM) (debug log -> $(TEST_LOG))"
 	@mkdir -p "$(dir $(TEST_LOG))"
-	@$(TUIST) test --configuration Debug -- -destination 'platform=iOS Simulator,name=$(DEST_SIM),OS=$(DEST_OS)' -parallel-testing-enabled YES 2>&1 | tee "$(TEST_LOG)"
+	@$(TUIST) test --no-selective-testing --configuration Debug -- -destination 'platform=iOS Simulator,name=$(DEST_SIM),OS=$(DEST_OS)' -parallel-testing-enabled YES 2>&1 | tee "$(TEST_LOG)"
 build-example:
 	@echo "[Make] Building GenMarkExample via Tuist"
 	@$(TUIST) build GenMarkExample --configuration Debug

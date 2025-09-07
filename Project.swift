@@ -6,7 +6,7 @@ let project = Project(
         automaticSchemesOptions: .enabled(
             targetSchemesGrouping: .notGrouped,
             codeCoverageEnabled: true,
-            testingOptions: []
+            testingOptions: [.parallelizable]
         )
     ),
     settings: .settings(
@@ -97,7 +97,7 @@ let project = Project(
         .scheme(
             name: "Debug",
             shared: true,
-            buildAction: .buildAction(targets: ["GenMarkCore", "GenMarkUI", "GenMarkUIKit", "GenMarkExample"]),
+            buildAction: .buildAction(targets: ["GenMarkCore", "GenMarkUI", "GenMarkUIKit", "GenMarkExample", "GenMarkCoreTests"]),
             testAction: .targets(["GenMarkCoreTests"]),
             runAction: .runAction(executable: "GenMarkExample")
         ),
