@@ -64,7 +64,7 @@ public struct MarkdownView: View {
             }
             .padding()
         }
-        .onChange(of: markdown) { newValue in
+        .onChange(of: markdown) { _, newValue in
             let parser = CMarkParser(options: parserOptions, extensions: extensions)
             parsed = parser.parse(markdown: newValue)
         }

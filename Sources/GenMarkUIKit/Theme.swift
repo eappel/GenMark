@@ -128,10 +128,17 @@ extension MarkdownTheme {
     /// Default system theme with standard iOS styling
     public static var systemDefault: MarkdownTheme {
         MarkdownTheme(
-            textAttributes: [
-                .font: UIFont.systemFont(ofSize: 16, weight: .regular),
-                .foregroundColor: UIColor.label
-            ],
+            textAttributes: {
+                var attrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 16, weight: .regular),
+                    .foregroundColor: UIColor.label
+                ]
+                let ps = NSMutableParagraphStyle()
+                ps.lineBreakMode = .byWordWrapping
+                ps.lineSpacing = 2
+                attrs[.paragraphStyle] = ps
+                return attrs
+            }(),
             h1Attributes: [
                 .font: UIFont.systemFont(ofSize: 28, weight: .semibold),
                 .foregroundColor: UIColor.label
