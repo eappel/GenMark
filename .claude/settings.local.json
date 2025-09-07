@@ -15,7 +15,9 @@
       "Bash(tuist install:*)",
       "Bash(xcrun simctl list:*)",
       "WebFetch(domain:github.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:wiki.c2.com)",
+      "WebFetch(domain:en.wikipedia.org)"
     ],
     "deny": [],
     "ask": []

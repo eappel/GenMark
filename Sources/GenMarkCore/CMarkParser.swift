@@ -35,9 +35,9 @@ public enum GFMExtension: String, CaseIterable, Sendable {
 
 /// Options for configuring the cmark-gfm parser behavior
 public struct ParserOptions: OptionSet, Sendable {
-    public let rawValue: Int32
+    public let rawValue: CInt
     
-    public init(rawValue: Int32) {
+    public init(rawValue: CInt) {
         self.rawValue = rawValue
     }
     
@@ -78,7 +78,7 @@ public struct CMarkParser: MarkdownParsing, Sendable {
     ///   - options: Parser options to control parsing behavior. Default includes all useful options
     ///   - extensions: GFM extensions to enable. Default includes all available extensions
     public init(
-        options: ParserOptions = [.unsafe, .smart, .validateUTF8],
+        options: ParserOptions = [.smart, .validateUTF8],
         extensions: Set<GFMExtension> = GFMExtension.all
     ) {
         self.options = options
@@ -183,7 +183,29 @@ private struct CMarkBridge {
             if let block = mapBlock(node) { blocks.append(block) }
             child = cmark_node_next(node)
         }
-        return MarkdownDocument(blocks: blocks)
+        // Flatten any nested document nodes produced by fallback mapping
+        let flat = flattenBlocks(blocks)
+        return MarkdownDocument(blocks: flat)
+    }
+
+    private func flattenBlocks(_ blocks: [BlockNode]) -> [BlockNode] {
+        var result: [BlockNode] = []
+        for block in blocks {
+            switch block {
+            case .document(let children):
+                result.append(contentsOf: flattenBlocks(children))
+            case .blockQuote(let children):
+                result.append(.blockQuote(children: flattenBlocks(children)))
+            case .list(let kind, let items):
+                let newItems = items.map { item in
+                    ListItem(checked: item.checked, children: flattenBlocks(item.children))
+                }
+                result.append(.list(kind: kind, items: newItems))
+            default:
+                result.append(block)
+            }
+        }
+        return result
     }
 
     private func mapBlock(_ node: UnsafeNode?) -> BlockNode? {
@@ -265,10 +287,11 @@ private struct CMarkBridge {
             if let mapped = mapBlock(n) { children.append(mapped) }
             c = cmark_node_next(n)
         }
-        // On GFM branches, the API returns `bool`. Non-task items won't have the
-        // "tasklist" type string set; use that to disambiguate nil vs false.
-        let isTaskItem = (nodeTypeString(node) == "tasklist")
-        let checked: Bool? = isTaskItem ? cmark_gfm_extensions_get_tasklist_item_checked(node) : nil
+        // Use the GFM API to detect tasklist items and checked state
+        // Getter returns false for both unchecked and non-task items; use setter to detect presence without changing state
+        let currentChecked = cmark_gfm_extensions_get_tasklist_item_checked(node)
+        let isTaskItem = cmark_gfm_extensions_set_tasklist_item_checked(node, currentChecked) == 1
+        let checked: Bool? = isTaskItem ? currentChecked : nil
         return ListItem(checked: checked, children: children)
     }
 
@@ -295,8 +318,9 @@ private struct CMarkBridge {
         case CMARK_NODE_LINEBREAK:
             return .lineBreak
         case CMARK_NODE_HTML_INLINE:
-            // HTML inline is not supported - return as plain text
+            // Convert common <br> variants to a line break; otherwise return as text
             let html = stringOrEmpty(cmark_node_get_literal(node))
+            if isHTMLBreak(html) { return .lineBreak }
             return .text(html)
         case CMARK_NODE_CODE:
             return .code(stringOrEmpty(cmark_node_get_literal(node)))
@@ -306,7 +330,10 @@ private struct CMarkBridge {
             if let url = URL(string: urlString) {
                 return .link(url: url, title: title, children: collectInlines(from: node))
             } else {
-                return .text(urlString)
+                // Invalid URL: render children as plain text to avoid losing content
+                let children = collectInlines(from: node)
+                let plain = children.map(inlinePlainText).joined()
+                return .text(plain.isEmpty ? urlString : plain)
             }
         case CMARK_NODE_IMAGE:
             let urlString = stringOrNil(cmark_node_get_url(node)) ?? ""
@@ -406,6 +433,32 @@ private struct CMarkBridge {
         guard let cstr else { return nil }
         let s = String(cString: cstr)
         return s.isEmpty ? nil : s
+    }
+
+    private func isHTMLBreak(_ html: String) -> Bool {
+        // Match <br>, <br/>, <br /> in any case with optional whitespace
+        let trimmed = html.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
+        return lower == "<br>" || lower == "<br/>" || lower == "<br />"
+    }
+
+    private func inlinePlainText(_ inline: InlineNode) -> String {
+        switch inline {
+        case .text(let s):
+            return s
+        case .code(let s):
+            return s
+        case .softBreak:
+            return " "
+        case .lineBreak:
+            return "\n"
+        case .image(_, let alt):
+            return alt ?? ""
+        case .emphasis(let children), .strong(let children), .strikethrough(let children):
+            return children.map(inlinePlainText).joined()
+        case .link(_, _, let children):
+            return children.map(inlinePlainText).joined()
+        }
     }
 }
 #endif

@@ -3,49 +3,6 @@ import XCTest
 
 final class FeatureDebugTests: XCTestCase {
     
-    func testHighlightExtensionAvailability() throws {
-        // Test if highlight/mark extension is actually available
-        let parser = CMarkParser(
-            options: [.default],
-            extensions: []  // highlight/mark not available
-        )
-        
-        let markdown = "==highlighted text=="
-        let result = parser.parse(markdown: markdown)
-        
-        print("\n=== HIGHLIGHT TEST ===")
-        print("Input: \(markdown)")
-        print("Blocks: \(result.blocks)")
-        
-        if case .paragraph(let inlines) = result.blocks.first {
-            print("Inlines in paragraph:")
-            for inline in inlines {
-                switch inline {
-                case .text(let text):
-                    print("  - Found text: '\(text)'")
-                default:
-                    print("  - Found other: \(inline)")
-                }
-            }
-        }
-        
-        // Check if it's being parsed as text instead
-        let hasHighlightNode = result.blocks.contains { block in
-            if case .paragraph(let inlines) = block {
-                return inlines.contains { inline in
-                    // if case .highlight = inline { return true }  // Not available
-                    return false
-                }
-            }
-            return false
-        }
-        
-        print("Has highlight node: \(hasHighlightNode)")
-        
-        // Note: The highlight extension might not be part of standard cmark-gfm
-        // It's possible that ==text== is not supported by the library we're using
-    }
-    
     func testSmartTypographyActuallyWorks() throws {
         let regularParser = CMarkParser(options: [.default])
         let smartParser = CMarkParser(options: [.default, .smart])
@@ -145,7 +102,6 @@ final class FeatureDebugTests: XCTestCase {
                     if case .paragraph(let inlines) = block {
                         featureFound = inlines.contains { inline in
                             if case .link = inline { return true }
-                            if case .autolink = inline { return true }
                             return false
                         }
                     }

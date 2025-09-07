@@ -23,7 +23,6 @@ public enum InlineNode: Equatable, Sendable {
     case image(url: URL, alt: String?)
     case softBreak
     case lineBreak
-    case autolink(URL)
     // Note: HTML, highlight/mark and footnotes are not supported by swift-cmark
 }
 
@@ -57,4 +56,3 @@ public struct MarkdownDocument: Sendable {
     public var blocks: [BlockNode]
     public init(blocks: [BlockNode]) { self.blocks = blocks }
 }
-

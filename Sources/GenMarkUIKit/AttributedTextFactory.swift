@@ -90,14 +90,7 @@ public struct AttributedTextFactory {
                 let finalAttrs = applyCustomization(to: inline, defaultAttributes: attributes)
                 result.append(NSAttributedString(string: "\n", attributes: finalAttrs))
                 
-            case .autolink(let url):
-                let linkAttrs = mergeAttributes(base: attributes, adding: theme.linkAttributes)
-                let finalAttrs = applyCustomization(to: inline, defaultAttributes: linkAttrs)
-                
-                let attributedString = NSAttributedString(string: url.absoluteString, attributes: finalAttrs)
-                let range = NSRange(location: result.length, length: attributedString.length)
-                result.append(attributedString)
-                result.addAttribute(.link, value: url, range: range)
+            
             }
         }
     }

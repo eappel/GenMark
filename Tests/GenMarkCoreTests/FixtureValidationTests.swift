@@ -17,17 +17,6 @@ final class FixtureValidationTests: XCTestCase {
         let smartResult = smartParser.parse(markdown: markdown)
         XCTAssertFalse(smartResult.blocks.isEmpty, "Should parse fixture with smart options")
         
-        // Note: highlight/mark extension is not available in swift-cmark
-        // The ==text== syntax will be parsed as regular text
-        // Keeping this code for future reference if the extension becomes available
-        /*
-        var highlightCount = 0
-        for block in defaultResult.blocks {
-            highlightCount += countHighlights(in: block)
-        }
-        print("Found \(highlightCount) highlight nodes in fixture")
-        */
-        
         // Test HTML parsing
         var hasHTMLBreaks = false
         for block in defaultResult.blocks {
@@ -105,64 +94,5 @@ final class FixtureValidationTests: XCTestCase {
         }
         
         XCTAssertFalse(hasTable, "Should not have table nodes without table extension")
-    }
-    
-    private func countHighlights(in block: BlockNode) -> Int {
-        var count = 0
-        
-        switch block {
-        case .paragraph(let inlines), .heading(_, let inlines):
-            for inline in inlines {
-                count += countHighlights(in: inline)
-            }
-        case .list(_, let items):
-            for item in items {
-                for child in item.children {
-                    count += countHighlights(in: child)
-                }
-            }
-        case .blockQuote(let children), .document(let children):
-            for child in children {
-                count += countHighlights(in: child)
-            }
-        case .table(let headers, let rows):
-            for header in headers {
-                for inline in header.inlines {
-                    count += countHighlights(in: inline)
-                }
-            }
-            for row in rows {
-                for cell in row {
-                    for inline in cell.inlines {
-                        count += countHighlights(in: inline)
-                    }
-                }
-            }
-        default:
-            break
-        }
-        
-        return count
-    }
-    
-    private func countHighlights(in inline: InlineNode) -> Int {
-        switch inline {
-        // case .highlight:  // Not available in swift-cmark
-        //     return 1
-        case .emphasis(let children), .strong(let children), .strikethrough(let children):
-            var count = 0
-            for child in children {
-                count += countHighlights(in: child)
-            }
-            return count
-        case .link(_, _, let children):
-            var count = 0
-            for child in children {
-                count += countHighlights(in: child)
-            }
-            return count
-        default:
-            return 0
-        }
     }
 }

@@ -388,42 +388,42 @@ MarkdownView(
 
 ## TODO (Living Checklist)
 - [x] Create SPM package with targets `GenMarkCore`, `GenMarkUIKit`, `GenMarkUI` (iOS 18)
-- [x] Author ≥3 complex GFM markdown fixtures (cover tables, lists, tasks, footnotes, autolinks, images, code)
+- [x] SPM: Swift 6 tools and `platforms: [.iOS(.v18)]`
+- [x] SPM: `swift-cmark` dependency using GFM products
 - [x] Add `cmark-gfm` dependency and parser wrapper in Core (attach GFM extensions)
 - [x] Define internal node model (blocks/inlines)
+- [x] Structure: Keep Core UI‑agnostic; move `AttributedTextFactory` into UIKit target
+- [x] Tuist: Workspace/Project using modern DSL (`destinations`, `deploymentTargets`)
+- [x] Tuist: Dependencies.swift mapping GFM products (`cmark-gfm`, `cmark-gfm-extensions`)
+- [x] Parser options: Added configurable parser options (sourcePos, hardBreaks, noBreaks, validateUTF8, smart)
+- [x] Customizable extensions: Allow enabling/disabling specific GFM extensions
+- [x] Author ≥3 complex GFM markdown fixtures (cover tables, lists, tasks, footnotes, autolinks, images, code)
 - [x] Parser unit tests skeleton using fixtures; add Tuist unit‑test target
+- [x] Test infrastructure: Tuist test targets working with proper scheme configuration
 - [x] Implement `AttributedTextFactory` (baseline inline → NSAttributedString)
 - [x] Build `MarkdownTextView` (UITextView/TextKit, selectable text, link delegate, zero insets)
-- [x] Implement SwiftUI block renderers (paragraphs, headings, quotes) via `BlockRenderer`
-- [x] Implement lists (ordered, bullet, task list with proper markers and alignment)
-- [x] Implement code blocks (monospaced, selectable; no highlighting)
-- [x] Implement tables with `LazyVGrid` and alignment
+- [x] UITextView text wrapping: Fixed overflow issue with `sizeThatFits` implementation
+- [x] Integrate `@Environment(\.openURL)` for link taps via UITextView bridge
 - [x] Design `MarkdownTheme` defaults (system colors, explicit fonts)
 - [x] Implement customization system with transparent NSAttributedString.Key dictionaries
 - [x] Replace TextStyle abstraction with direct attribute dictionary operations
-- [x] Integrate `@Environment(\.openURL)` for link taps via UITextView bridge
+- [x] Implement SwiftUI block renderers (paragraphs, headings, quotes) via `BlockRenderer`
+- [x] List markers: Bullets ("•"), ordered numbers, and checkbox symbols for task lists
+- [x] Implement lists (ordered, bullet, task list with proper markers and alignment)
+- [x] Implement code blocks (monospaced, selectable; no highlighting)
+- [x] Implement tables with `LazyVGrid` and alignment
+- [x] Table cell alignment: Implemented left/center/right alignment from GFM spec
+- [x] HTML handling: HTML tags are rendered as plain text (no HTML parsing/rendering)
+- [x] Example app: Xcode Previews + fixture menu; fixtures bundled in app resources
 - [ ] Define `MarkdownImageLoader` protocol and default lightweight loader (URLSession + NSCache)
+- [ ] Performance profiling on large README.md and table‑heavy docs
+- [ ] Optimize UITextView reuse and in-place updates for streaming performance
 - [ ] Add parse and attributed string caches (keys include trait collection) with LLM streaming optimizations
 - [ ] Add measurement cache for paragraphs/headings
 - [ ] Implement incremental content diffing for streaming updates
 - [ ] Add debounced parsing for high-frequency content changes
-- [ ] Optimize UITextView reuse and in-place updates for streaming performance
 - [ ] Accessibility review (VoiceOver, Dynamic Type, contrast)
-- [ ] Performance profiling on large README.md and table‑heavy docs
 - [ ] Documentation: Quick start, theming, overrides, performance tips
-- [x] Example app: Xcode Previews + fixture menu; fixtures bundled in app resources
-- [x] Tuist: Workspace/Project using modern DSL (`destinations`, `deploymentTargets`)
-- [x] Tuist: Dependencies.swift mapping GFM products (`cmark-gfm`, `cmark-gfm-extensions`)
-- [x] SPM: `swift-cmark` dependency using GFM products
-- [x] Structure: Keep Core UI‑agnostic; move `AttributedTextFactory` into UIKit target
-- [x] SPM: Swift 6 tools and `platforms: [.iOS(.v18)]`
-- [x] UITextView text wrapping: Fixed overflow issue with `sizeThatFits` implementation
-- [x] List markers: Bullets ("•"), ordered numbers, and checkbox symbols for task lists
-- [x] Test infrastructure: Tuist test targets working with proper scheme configuration
-- [x] Table cell alignment: Implemented left/center/right alignment from GFM spec
-- [x] HTML handling: HTML tags are rendered as plain text (no HTML parsing/rendering)
-- [x] Parser options: Added configurable parser options (sourcePos, hardBreaks, noBreaks, validateUTF8, smart)
-- [x] Customizable extensions: Allow enabling/disabling specific GFM extensions
 
 ## Risks & Mitigations
 - `swift-cmark` integration complexity: pin a known commit; add CI step to validate headers and symbols; abstract behind small parser API.
