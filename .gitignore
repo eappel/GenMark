@@ -76,3 +76,6 @@ Derived/
 
 # Local build artifacts
 build/
+
+# Local test logs
+test-output.txt
