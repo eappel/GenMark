@@ -183,29 +183,7 @@ private struct CMarkBridge {
             if let block = mapBlock(node) { blocks.append(block) }
             child = cmark_node_next(node)
         }
-        // Flatten any nested document nodes produced by fallback mapping
-        let flat = flattenBlocks(blocks)
-        return MarkdownDocument(blocks: flat)
-    }
-
-    private func flattenBlocks(_ blocks: [BlockNode]) -> [BlockNode] {
-        var result: [BlockNode] = []
-        for block in blocks {
-            switch block {
-            case .document(let children):
-                result.append(contentsOf: flattenBlocks(children))
-            case .blockQuote(let children):
-                result.append(.blockQuote(children: flattenBlocks(children)))
-            case .list(let kind, let items):
-                let newItems = items.map { item in
-                    ListItem(checked: item.checked, children: flattenBlocks(item.children))
-                }
-                result.append(.list(kind: kind, items: newItems))
-            default:
-                result.append(block)
-            }
-        }
-        return result
+        return MarkdownDocument(blocks: blocks)
     }
 
     private func mapBlock(_ node: UnsafeNode?) -> BlockNode? {

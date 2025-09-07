@@ -9,19 +9,26 @@ public struct MarkdownView: View {
     private let customization: MarkdownCustomization
     private let parserOptions: ParserOptions
     private let extensions: Set<GFMExtension>
+    // Test-only flag to compare cached vs. non-cached parsing
+    internal let disableParsingCacheForTesting: Bool
+    @State private var parsed: MarkdownDocument = MarkdownDocument(blocks: [])
 
     public init(
         _ markdown: String,
         theme: MarkdownTheme = .systemDefault,
         customization: MarkdownCustomization = .none,
         parserOptions: ParserOptions = [.smart, .validateUTF8],
-        extensions: Set<GFMExtension> = GFMExtension.all
+        extensions: Set<GFMExtension> = GFMExtension.all,
+        disableParsingCacheForTesting: Bool = false
     ) {
         self.markdown = markdown
         self.theme = theme
         self.customization = customization
         self.parserOptions = parserOptions
         self.extensions = extensions
+        self.disableParsingCacheForTesting = disableParsingCacheForTesting
+        // Eagerly parse once for initial state
+        _parsed = State(initialValue: CMarkParser(options: parserOptions, extensions: extensions).parse(markdown: markdown))
     }
     
     // Convenience initializer for minimal CommonMark parsing
@@ -40,8 +47,15 @@ public struct MarkdownView: View {
     }
 
     public var body: some View {
-        let parser = CMarkParser(options: parserOptions, extensions: extensions)
-        let doc = parser.parse(markdown: markdown)
+        // Use cached parse unless testing requests to disable
+        let doc: MarkdownDocument = {
+            if disableParsingCacheForTesting {
+                let parser = CMarkParser(options: parserOptions, extensions: extensions)
+                return parser.parse(markdown: markdown)
+            } else {
+                return parsed
+            }
+        }()
         ScrollView {
             LazyVStack(alignment: .leading, spacing: theme.blockSpacing) {
                 ForEach(doc.blocks.indices, id: \.self) { i in
@@ -49,6 +63,10 @@ public struct MarkdownView: View {
                 }
             }
             .padding()
+        }
+        .onChange(of: markdown) { newValue in
+            let parser = CMarkParser(options: parserOptions, extensions: extensions)
+            parsed = parser.parse(markdown: newValue)
         }
     }
 }
@@ -190,12 +208,16 @@ private struct CellRenderer: View {
             }()
             OpenURLMarkdownTextView(attributedText: mutable)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 6)
                 .border(.secondary)
         } else {
             // For regular cells, use default text attributes
             let attr = factory.make(from: cell.inlines)
             OpenURLMarkdownTextView(attributedText: attr)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 6)
                 .border(.secondary)
         }
     }

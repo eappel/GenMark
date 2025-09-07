@@ -173,24 +173,24 @@ nchanged content.
   - [x] Remove `InlineNode.autolink`; treat autolinks as `.link` uniformly (update model and tests).
   - [x] Verify `<br>` handling: if cmark doesn’t normalize to breaks, map common HTML `<br>` variants to `.lineBreak` in inline mapping and update tests accordingly.
   - [x] Task items: drop string-based type checks; rely on `cmark_gfm_extensions_get_tasklist_item_checked` (confirm exact GFM node type if still needed).
-  - [x] Flatten container fallbacks in `mapBlock` to avoid nested `.document` nodes.
+  - [ ] Flatten container fallbacks in `mapBlock` to avoid nested `.document` nodes. (Decision: removed flattening logic to reduce complexity)
   - [ ] Add optional `range: Range<Int>` (source positions) to nodes; enable `CMARK_OPT_SOURCEPOS` in parsing and plumb through.
   - [x] Use `CInt` alias (or clearly documented type) for `ParserOptions` rawValue for clarity.
   - [x] Invalid URL handling: when a link URL is invalid, render child inline content as text instead of dropping it.
 
 - [ ] UIKit/TextKit (GenMarkUIKit)
   - [ ] AttributedTextFactory: add a small paragraph style tweak (e.g., line height) for code spans/blocks.
-  - [ ] MarkdownTextView: update `sizeThatFits` to honor `proposal.width` only; return nil when unspecified (avoid `UIScreen.main.bounds.width`).
-  - [ ] MarkdownTextView: set `uiView.adjustsFontForContentSizeCategory = true`.
+  - [x] MarkdownTextView: update `sizeThatFits` to honor `proposal.width` only; return nil when unspecified (avoid `UIScreen.main.bounds.width`).
+  - [x] MarkdownTextView: set `uiView.adjustsFontForContentSizeCategory = true`.
   - [ ] Streaming updates prep: preserve selection and mutate a shared `NSMutableAttributedString` instead of wholesale replacement.
   - [ ] Theme: pre-scale fonts with `UIFontMetrics` or provide helper to scale per `UITraitCollection`.
-  - [ ] Theme: document `@unchecked Sendable` constraints and discourage post-init mutation by consumers.
-  - [ ] Theme: add paragraph/line spacing defaults via `NSParagraphStyle` in `textAttributes`.
+  - [x] Theme: document `@unchecked Sendable` constraints and discourage post-init mutation by consumers.
+  - [x] Theme: add paragraph/line spacing defaults via `NSParagraphStyle` in `textAttributes`.
 
 - [ ] SwiftUI (GenMarkUI)
-  - [ ] MarkdownView: add parsed-model state/cache (`@State private var parsed`) and update in `onChange(of: markdown)` to avoid unnecessary re-parsing.
+  - [x] MarkdownView: add parsed-model state/cache (`@State private var parsed`) and update in `onChange(of: markdown)` to avoid unnecessary re-parsing.
   - [ ] Use source-position-based stable IDs for `ForEach` when available.
-  - [ ] Tables: add cell padding for readability (not only `.border(.secondary)`).
+  - [x] Tables: add cell padding for readability (not only `.border(.secondary)`).
 
 - [ ] Tests
   - [ ] Replace print-only tests with assertions (e.g., in `GFMComplianceTests`, `FeatureDebugTests`).

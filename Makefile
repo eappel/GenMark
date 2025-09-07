@@ -1,4 +1,5 @@
 .PHONY: reload clean build build-example test test-debug open
+ .PHONY: test-bundle
 
 # Ensure a predictable shell
 SHELL := /bin/bash
@@ -44,6 +45,14 @@ test-debug:
 	@echo "[Make] Running unit tests via Tuist on $(DEST_SIM) (debug log -> $(TEST_LOG))"
 	@mkdir -p "$(dir $(TEST_LOG))"
 	@$(TUIST) test --no-selective-testing --configuration Debug -- -destination 'platform=iOS Simulator,name=$(DEST_SIM),OS=$(DEST_OS)' -parallel-testing-enabled YES 2>&1 | tee "$(TEST_LOG)"
+
+# Run tests and save an .xcresult bundle with attachments/activities
+# Usage: `make test-bundle RESULT_BUNDLE=Derived/TestResults.xcresult`
+RESULT_BUNDLE ?= Derived/TestResults.xcresult
+test-bundle:
+	@echo "[Make] Running tests and saving result bundle to $(RESULT_BUNDLE)"
+	@mkdir -p "$(dir $(RESULT_BUNDLE))"
+	@$(TUIST) test --no-selective-testing --configuration Debug -- -resultBundlePath '$(RESULT_BUNDLE)' -destination 'platform=iOS Simulator,name=$(DEST_SIM),OS=$(DEST_OS)' -parallel-testing-enabled YES | tee "$(TEST_LOG)"
 build-example:
 	@echo "[Make] Building GenMarkExample via Tuist"
 	@$(TUIST) build GenMarkExample --configuration Debug

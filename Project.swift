@@ -89,6 +89,7 @@ let project = Project(
             ],
             dependencies: [
                 .target(name: "GenMarkCore"),
+                .target(name: "GenMarkUI"),
                 .xctest
             ]
         )
