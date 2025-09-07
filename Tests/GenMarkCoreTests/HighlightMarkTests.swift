@@ -46,21 +46,15 @@ final class HighlightMarkTests: XCTestCase {
         let result = parser.parse(markdown: markdown)
         
         guard result.blocks.count == 1,
-              case .paragraph(let inlines) = result.blocks[0] else {
+              case .paragraph(_) = result.blocks[0] else {
             XCTFail("Expected single paragraph")
             return
         }
         
         // Check for highlight with nested strong emphasis
         // Note: highlight extension not available, so this will always be false
-        let foundNestedStrong = false
-        
-        // Note: Behavior depends on whether extension supports nesting
-        if foundNestedStrong {
-            print("Highlight extension supports nested formatting")
-        } else {
-            print("Highlight extension may not support nested formatting or is unavailable")
-        }
+        // Note: Highlight extension not available; nesting behavior unsupported in this build
+        print("Highlight extension unavailable; nesting not evaluated in tests")
     }
     
     func testMultipleHighlights() throws {
@@ -73,23 +67,15 @@ final class HighlightMarkTests: XCTestCase {
         let result = parser.parse(markdown: markdown)
         
         guard result.blocks.count == 1,
-              case .paragraph(let inlines) = result.blocks[0] else {
+              case .paragraph(_) = result.blocks[0] else {
             XCTFail("Expected single paragraph")
             return
         }
         
         // Count highlight nodes
         // Note: highlight extension not available, so count will always be 0
-        let highlightCount = 0
-        
-        // Should have 2 highlights if extension is available
-        if highlightCount == 2 {
-            print("Found two highlight nodes as expected")
-        } else if highlightCount == 0 {
-            print("Highlight extension not available - syntax treated as text")
-        } else {
-            print("Unexpected number of highlight nodes: \(highlightCount)")
-        }
+        // Highlight extension not available in this build; syntax treated as text
+        print("Highlight extension not available - syntax treated as text")
     }
     
     func testHighlightWithOtherExtensions() throws {
@@ -111,7 +97,7 @@ final class HighlightMarkTests: XCTestCase {
         }
         
         // Check for presence of different inline types
-        var hasHighlight = false
+        let hasHighlight = false
         var hasStrikethrough = false
         var hasAutolink = false
         
@@ -132,12 +118,8 @@ final class HighlightMarkTests: XCTestCase {
         XCTAssertTrue(hasStrikethrough, "Strikethrough should be detected")
         XCTAssertTrue(hasAutolink, "Autolink should be detected")
         
-        // Highlight depends on extension availability
-        if hasHighlight {
-            print("All three extensions working: highlight, strikethrough, autolink")
-        } else {
-            print("Highlight not available, but other extensions working")
-        }
+        // Highlight depends on extension availability (not available here)
+        print("Highlight not available, but other extensions working")
     }
     
     func testEdgeCases() throws {

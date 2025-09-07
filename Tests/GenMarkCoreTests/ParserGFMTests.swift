@@ -64,7 +64,7 @@ final class ParserGFMTests: XCTestCase {
 
     func test_table_alignment_from_fixture() throws {
         let url = try XCTUnwrap(Bundle(for: type(of: self)).url(forResource: "fixture_tables", withExtension: "md"))
-        let md = try String(contentsOf: url)
+        let md = try String(contentsOf: url, encoding: .utf8)
         let doc = parser.parse(markdown: md)
         guard let table = firstTable(in: doc.blocks) else { return XCTFail("Expected table") }
         // Table with 3 headers: left, center, right
@@ -123,4 +123,3 @@ final class ParserGFMTests: XCTestCase {
         return nil
     }
 }
-

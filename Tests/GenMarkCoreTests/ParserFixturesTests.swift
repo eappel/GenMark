@@ -6,7 +6,7 @@ final class ParserFixturesTests: XCTestCase {
         let names = ["fixture_readme", "fixture_tables", "fixture_long"]
         for name in names {
             let url = try XCTUnwrap(Bundle(for: type(of: self)).url(forResource: name, withExtension: "md"))
-            let contents = try String(contentsOf: url)
+            let contents = try String(contentsOf: url, encoding: .utf8)
             XCTAssertFalse(contents.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "Fixture \(name) should not be empty")
         }
     }
@@ -16,7 +16,7 @@ final class ParserFixturesTests: XCTestCase {
         let names = ["fixture_readme", "fixture_tables", "fixture_long"]
         for name in names {
             let url = try XCTUnwrap(Bundle(for: type(of: self)).url(forResource: name, withExtension: "md"))
-            let contents = try String(contentsOf: url)
+            let contents = try String(contentsOf: url, encoding: .utf8)
             let doc = parser.parse(markdown: contents)
             // For now, stub returns a single paragraph. Validate non-empty blocks.
             XCTAssertFalse(doc.blocks.isEmpty)

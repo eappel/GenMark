@@ -1,5 +1,4 @@
 import SwiftUI
-import GenMarkUI
 
 struct MarkdownViewPreviews: PreviewProvider {
     static var previews: some View {
@@ -24,7 +23,7 @@ struct MarkdownViewPreviews: PreviewProvider {
 
         private func load() {
             if let url = Bundle.module.url(forResource: resource, withExtension: "md", subdirectory: "Resources/Fixtures") {
-                if let s = try? String(contentsOf: url) {
+                if let s = try? String(contentsOf: url, encoding: .utf8) {
                     text = s
                     return
                 }
@@ -33,4 +32,3 @@ struct MarkdownViewPreviews: PreviewProvider {
         }
     }
 }
-

@@ -59,7 +59,7 @@ final class TableParsingTests: XCTestCase {
     
     func test_fixture_tables_parsing() throws {
         let url = try XCTUnwrap(Bundle(for: type(of: self)).url(forResource: "fixture_tables", withExtension: "md"))
-        let md = try String(contentsOf: url)
+        let md = try String(contentsOf: url, encoding: .utf8)
         let doc = parser.parse(markdown: md)
         
         // Find the table block
