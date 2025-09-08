@@ -50,6 +50,7 @@ struct CustomizationExampleView: View {
                     if case .link = node {
                         var newAttrs = attrs
                         newAttrs[.foregroundColor] = UIColor.systemRed
+                        newAttrs[.attachment] = UIImage(systemName: "checkmark")
                         newAttrs[.underlineStyle] = nil
                         return newAttrs
                     }
@@ -119,7 +120,7 @@ struct CustomizationExampleView: View {
                         // Custom code block rendering
                         if case .codeBlock(let language, let code) = node {
                             return AnyView(
-                                VStack(alignment: .leading) {
+                                VStack(alignment: .leading, spacing: 0) {
                                     if let lang = language {
                                         Text(lang)
                                             .font(.caption)
@@ -128,15 +129,17 @@ struct CustomizationExampleView: View {
                                             .padding(.vertical, 2)
                                             .background(Color.purple)
                                             .cornerRadius(4)
+                                            .padding()
                                     }
                                     Text(code)
                                         .font(.system(.body, design: .monospaced))
                                         .foregroundColor(.white)
-                                        .padding()
+                                        .padding(.horizontal)
+                                        .padding(.bottom)
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(Color.black)
-                                        .cornerRadius(8)
                                 }
+                                .background(Color.black)
+                                .cornerRadius(8)
                             )
                         }
                         return nil

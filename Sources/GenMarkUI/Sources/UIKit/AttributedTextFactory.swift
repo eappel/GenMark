@@ -52,15 +52,21 @@ public struct AttributedTextFactory {
                 result.append(NSAttributedString(string: text, attributes: finalAttrs))
                 
             case .emphasis(let children):
-                let emphasisAttrs = applyEmphasis(to: attributes)
+                // Start with theme emphasis, allow customization to override for this wrapper
+                let emphasisBase = applyEmphasis(to: attributes)
+                let emphasisAttrs = applyCustomization(to: .emphasis(children), defaultAttributes: emphasisBase)
                 appendInlines(children, to: result, attributes: emphasisAttrs)
                 
             case .strong(let children):
-                let strongAttrs = applyStrong(to: attributes)
+                // Start with theme strong, allow customization to override for this wrapper
+                let strongBase = applyStrong(to: attributes)
+                let strongAttrs = applyCustomization(to: .strong(children), defaultAttributes: strongBase)
                 appendInlines(children, to: result, attributes: strongAttrs)
                 
             case .strikethrough(let children):
-                let strikethroughAttrs = mergeAttributes(base: attributes, adding: theme.strikethroughAttributes)
+                // Start with theme strikethrough, allow customization to override for this wrapper
+                let strikeBase = mergeAttributes(base: attributes, adding: theme.strikethroughAttributes)
+                let strikethroughAttrs = applyCustomization(to: .strikethrough(children), defaultAttributes: strikeBase)
                 appendInlines(children, to: result, attributes: strikethroughAttrs)
                 
             case .code(let code):
@@ -68,11 +74,16 @@ public struct AttributedTextFactory {
                 let finalAttrs = applyCustomization(to: inline, defaultAttributes: codeAttrs)
                 result.append(NSAttributedString(string: code, attributes: finalAttrs))
                 
-            case .link(let url, _, let children):
-                let linkAttrs = mergeAttributes(base: attributes, adding: theme.linkAttributes)
-                
+            case .link(let url, let title, let children):
+                // Start from theme link attributes, then allow customization to override
+                let defaultLinkAttrs = mergeAttributes(base: attributes, adding: theme.linkAttributes)
+                let customizedLinkAttrs = applyCustomization(
+                    to: .link(url: url, title: title, children: children),
+                    defaultAttributes: defaultLinkAttrs
+                )
+
                 let startRange = result.length
-                appendInlines(children, to: result, attributes: linkAttrs)
+                appendInlines(children, to: result, attributes: customizedLinkAttrs)
                 let range = NSRange(location: startRange, length: result.length - startRange)
                 result.addAttribute(.link, value: url, range: range)
                 

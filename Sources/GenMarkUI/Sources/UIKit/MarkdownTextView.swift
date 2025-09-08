@@ -36,13 +36,7 @@ public struct OpenURLMarkdownTextView: View {
 
         func updateUIView(_ uiView: UITextView, context: Context) {
             uiView.attributedText = attributedText
-            // We clear UITextView's global linkTextAttributes so that the
-            // per-range attributes embedded in our NSAttributedString (via
-            // AttributedTextFactory + theme.linkAttributes and the `.link`
-            // attribute) fully control link appearance. If this is left
-            // non-empty, UIKit's defaults can override our color/underline
-            // styling and ignore theme customizations. Setting it to empty
-            // keeps links interactive while respecting our attributed text.
+            // Ensure our per-range attributes control link appearance
             uiView.linkTextAttributes = [:]
         }
         
