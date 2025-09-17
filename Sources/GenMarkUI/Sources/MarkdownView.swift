@@ -55,18 +55,15 @@ public struct MarkdownView: View {
                 return parsed
             }
         }()
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: theme.blockSpacing) {
-                ForEach(doc.blocks.indices, id: \.self) { i in
-                    BlockRenderer(node: doc.blocks[i], theme: theme, customization: customization)
-                }
+        ForEach(doc.blocks.indices, id: \.self) { i in
+            BlockRenderer(node: doc.blocks[i], theme: theme, customization: customization)
+                .padding(.bottom, theme.blockSpacing)
+        }
+        Spacer().frame(height: 1)
+            .onChange(of: markdown) { _, newValue in
+                let parser = CMarkParser(options: parserOptions, extensions: extensions)
+                parsed = parser.parse(markdown: newValue)
             }
-            .padding()
-        }
-        .onChange(of: markdown) { _, newValue in
-            let parser = CMarkParser(options: parserOptions, extensions: extensions)
-            parsed = parser.parse(markdown: newValue)
-        }
     }
 }
 

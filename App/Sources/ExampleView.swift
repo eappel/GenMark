@@ -3,19 +3,24 @@ import GenMarkUI
 
 struct ExampleView: View {
     @State private var text: String = "# GenMark\n\nLoading fixture..."
-
+    
     var body: some View {
         NavigationView {
-            MarkdownView(
-                text,
-                customization: .block { node, theme in
-                    // Custom heading with gradient
-//                    if case .table(let headers, let rows) = node {
-//                        return AnyView(Rectangle().fill(.orange))
-//                    }
-                    return nil
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    MarkdownView(
+                        text,
+                        customization: .block { node, theme in
+                            // Custom heading with gradient
+                            //                    if case .table(let headers, let rows) = node {
+                            //                        return AnyView(Rectangle().fill(.orange))
+                            //                    }
+                            return nil
+                        }
+                    )
+                    .padding(.horizontal)
                 }
-            )
+            }
             .navigationTitle("GenMark Preview")
             .onAppear { loadFixture("fixture_readme") }
             .toolbar {

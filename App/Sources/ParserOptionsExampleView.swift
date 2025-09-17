@@ -91,13 +91,15 @@ struct ParserOptionsExampleView: View {
                 .background(Color(UIColor.secondarySystemBackground))
                 
                 Divider()
-                
-                // Markdown preview with current options
-                MarkdownView(
-                    sampleText,
-                    parserOptions: currentOptions,
-                    extensions: selectedExtensions
-                )
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        MarkdownView(
+                            sampleText,
+                            parserOptions: currentOptions,
+                            extensions: selectedExtensions
+                        )
+                    }
+                }
                 .padding()
                 
                 Spacer()
