@@ -415,7 +415,7 @@ MarkdownView(
 - [x] Table cell alignment: Implemented left/center/right alignment from GFM spec
 - [x] HTML handling: HTML tags are rendered as plain text (no HTML parsing/rendering)
 - [x] Example app: Xcode Previews + fixture menu; fixtures bundled in app resources
-- [ ] Define `MarkdownImageLoader` protocol and default lightweight loader (URLSession + NSCache)
+- [x] Define `MarkdownImageLoader` protocol and default lightweight loader (URLSession + NSCache)
 - [ ] Performance profiling on large README.md and table‑heavy docs
 - [ ] Optimize UITextView reuse and in-place updates for streaming performance
 - [ ] Add parse and attributed string caches (keys include trait collection) with LLM streaming optimizations

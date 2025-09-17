@@ -50,9 +50,17 @@ let greeting = "Hello, world!"
 print(greeting)
 ```
 
-## Image
+## Images
 
-![Alt text](https://example.com/image.png)
+Basic remote image:
+
+![Lorem picsum](https://picsum.photos/200/300)
+
+Image with explicit alt text and caption:
+
+![Swift logo](https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Swift_logo.svg/512px-Swift_logo.svg.png)
+
+_Figure 1:_ Swift logo fetched over the network.
 
 ## Footnotes
 

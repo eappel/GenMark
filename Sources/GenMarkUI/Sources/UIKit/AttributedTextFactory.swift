@@ -3,6 +3,7 @@ import GenMarkCore
 
 /// Factory for creating NSAttributedString instances from inline markdown nodes
 /// Uses the theme's attribute dictionaries directly for transparent and traceable construction
+@MainActor
 public struct AttributedTextFactory {
     let theme: MarkdownTheme
     let customization: MarkdownCustomization

@@ -30,7 +30,7 @@ func fib(_ n: Int) -> Int { n < 2 ? n : fib(n-1) + fib(n-2) }
 | alpha | 1 |
 | beta | 2 |
 
-Autolink: <https://example.org> and image: ![logo](https://example.com/logo.png)
+Autolink: <https://example.org> and image: ![Mountain landscape](https://picsum.photos/seed/genmark-long/640/360)
 
 ---
 

@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 import GenMarkCore
 
-public struct OpenURLMarkdownTextView: View {
+public struct MarkdownTextView: View {
     @Environment(\.openURL) private var openURL
     private let attributed: NSAttributedString
 

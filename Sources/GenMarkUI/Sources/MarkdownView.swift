@@ -70,11 +70,42 @@ public struct MarkdownView: View {
     }
 }
 
+private func standaloneImageInfo(from inlines: [InlineNode]) -> (url: URL, alt: String?)? {
+    let filtered = inlines.filter { inline -> Bool in
+        switch inline {
+        case .softBreak, .lineBreak:
+            return false
+        default:
+            return true
+        }
+    }
+    guard filtered.count == 1 else { return nil }
+    if case let .image(url, alt) = filtered[0] {
+        return (url, alt)
+    }
+    return nil
+}
+
+private func splitTextAndImages(from inlines: [InlineNode]) -> (text: [InlineNode], images: [(url: URL, alt: String?)]) {
+    var text: [InlineNode] = []
+    var images: [(URL, String?)] = []
+
+    for inline in inlines {
+        switch inline {
+        case .image(let url, let alt):
+            images.append((url, alt))
+        default:
+            text.append(inline)
+        }
+    }
+    return (text, images)
+}
+
 private struct BlockRenderer: View {
     let node: BlockNode
     let theme: MarkdownTheme
     let customization: MarkdownCustomization
-    
+
     @ViewBuilder
     private func listMarker(for kind: ListKind, index: Int, checked: Bool?, theme: MarkdownTheme) -> some View {
         let textFont = theme.textAttributes[.font] as? UIFont ?? UIFont.systemFont(ofSize: 16)
@@ -112,14 +143,45 @@ private struct BlockRenderer: View {
     private var defaultView: some View {
         switch node {
         case .paragraph(let inlines):
-            let factory = AttributedTextFactory(theme: theme, customization: customization)
-            let attr = factory.make(from: inlines)
-            OpenURLMarkdownTextView(attributedText: attr)
+            if let image = standaloneImageInfo(from: inlines) {
+                MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
+            } else {
+                let (textInlines, images) = splitTextAndImages(from: inlines)
+                if images.isEmpty {
+                    let factory = AttributedTextFactory(theme: theme, customization: customization)
+                    let attr = factory.make(from: textInlines)
+                    MarkdownTextView(attributedText: attr)
+                } else {
+                    VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
+                        if !textInlines.isEmpty {
+                            let factory = AttributedTextFactory(theme: theme, customization: customization)
+                            let attr = factory.make(from: textInlines)
+                            MarkdownTextView(attributedText: attr)
+                        }
+                        ForEach(Array(images.enumerated()), id: \.0) { _, image in
+                            MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
+                        }
+                    }
+                }
+            }
         case .heading(let level, let inlines):
             let factory = AttributedTextFactory(theme: theme, customization: customization)
             let headingAttrs = theme.headingAttributes(for: level)
-            let attr = factory.make(from: inlines, baseAttributes: headingAttrs)
-            OpenURLMarkdownTextView(attributedText: attr)
+            let (textInlines, images) = splitTextAndImages(from: inlines)
+            if images.isEmpty {
+                let attr = factory.make(from: textInlines, baseAttributes: headingAttrs)
+                MarkdownTextView(attributedText: attr)
+            } else {
+                VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
+                    if !textInlines.isEmpty {
+                        let attr = factory.make(from: textInlines, baseAttributes: headingAttrs)
+                        MarkdownTextView(attributedText: attr)
+                    }
+                    ForEach(Array(images.enumerated()), id: \.0) { _, image in
+                        MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
+                    }
+                }
+            }
         case .blockQuote(let children):
             VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
                 ForEach(children.indices, id: \.self) { i in
@@ -148,7 +210,7 @@ private struct BlockRenderer: View {
             }
         case .codeBlock(_, let code):
             let attr = NSAttributedString(string: code, attributes: theme.codeBlockAttributes)
-            OpenURLMarkdownTextView(attributedText: attr)
+            MarkdownTextView(attributedText: attr)
                 .padding(8)
                 .background(Color(theme.secondaryBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -178,20 +240,59 @@ private struct BlockRenderer: View {
     }
 }
 
-
-private struct CellRenderer: View {
+public struct CellRenderer: View {
     let cell: TableCell
     let theme: MarkdownTheme
     let customization: MarkdownCustomization
     let isHeader: Bool
     
-    var body: some View {
+    public init(
+        cell: TableCell,
+        theme: MarkdownTheme,
+        customization: MarkdownCustomization,
+        isHeader: Bool
+    ) {
+        self.cell = cell
+        self.theme = theme
+        self.customization = customization
+        self.isHeader = isHeader
+    }
+    
+    public var body: some View {
+        Group {
+            if let image = standaloneImageInfo(from: cell.inlines) {
+                MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                let (textInlines, images) = splitTextAndImages(from: cell.inlines)
+                if images.isEmpty {
+                    renderText(for: textInlines, isHeader: isHeader)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
+                        if !textInlines.isEmpty {
+                            renderText(for: textInlines, isHeader: isHeader)
+                        }
+                        ForEach(Array(images.enumerated()), id: \.0) { _, image in
+                            MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .border(.secondary)
+    }
+    
+    @ViewBuilder
+    private func renderText(for inlines: [InlineNode], isHeader: Bool) -> some View {
         let factory = AttributedTextFactory(theme: theme, customization: customization)
         if isHeader {
-            // For headers, create bold font and use it
             let baseFont = theme.textAttributes[.font] as? UIFont ?? UIFont.systemFont(ofSize: 16)
             let boldFont = boldFont(from: baseFont)
-            let attr = factory.make(from: cell.inlines, baseFont: boldFont)
+            let attr = factory.make(from: inlines, baseFont: boldFont)
             let mutable: NSAttributedString = {
                 let mutable = NSMutableAttributedString(attributedString: attr)
                 mutable.addAttribute(
@@ -205,22 +306,13 @@ private struct CellRenderer: View {
                 )
                 return mutable
             }()
-            OpenURLMarkdownTextView(attributedText: mutable)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.vertical, 4)
-                .padding(.horizontal, 6)
-                .border(.secondary)
+            MarkdownTextView(attributedText: mutable)
         } else {
-            // For regular cells, use default text attributes
-            let attr = factory.make(from: cell.inlines)
-            OpenURLMarkdownTextView(attributedText: attr)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.vertical, 4)
-                .padding(.horizontal, 6)
-                .border(.secondary)
+            let attr = factory.make(from: inlines)
+            MarkdownTextView(attributedText: attr)
         }
     }
-    
+
     /// Creates a bold version of the given font
     private func boldFont(from font: UIFont) -> UIFont {
         let existingTraits = font.fontDescriptor.symbolicTraits

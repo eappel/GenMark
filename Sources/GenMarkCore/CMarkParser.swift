@@ -213,7 +213,12 @@ private struct CMarkBridge {
         case CMARK_NODE_THEMATIC_BREAK:
             return .thematicBreak
         case CMARK_NODE_HTML_BLOCK:
-            // HTML blocks are not supported - skip them
+            // Try to parse supported HTML block constructs (e.g., lists)
+            let html = stringOrEmpty(cmark_node_get_literal(node))
+            if let parsed = parseHTMLBlock(html) {
+                return parsed
+            }
+            // Otherwise, skip HTML blocks
             return nil
         case CMARK_NODE_LIST:
             var items: [ListItem] = []
@@ -255,6 +260,118 @@ private struct CMarkBridge {
             if !children.isEmpty { return .document(children: children) }
             return nil
         }
+    }
+
+    // MARK: - Minimal HTML Block Parsing
+
+    /// Attempts to parse a simple HTML block into a BlockNode.
+    /// Currently supports list blocks:
+    /// - <ul> <li>Item</li> ... </ul>
+    /// - <ol start="N"> <li>Item</li> ... </ol>
+    /// Notes:
+    /// - Designed to be forgiving and minimal: it strips tags inside <li> and treats content as plain text.
+    /// - Nested lists or complex HTML inside <li> are not supported (YAGNI). Content is flattened to text.
+    /// TODO(ai): Extend as needed when additional HTML block types are required.
+    private func parseHTMLBlock(_ html: String) -> BlockNode? {
+        let trimmed = html.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+
+        // Handle standalone <img> tags as paragraphs with image inline nodes
+        if let imageInline = parseHTMLImage(trimmed) {
+            return .paragraph(inlines: [imageInline])
+        }
+
+        // Match a single <ul> or <ol> block with its inner HTML
+        // (?is) equivalent via options: caseInsensitive + dotMatchesLineSeparators
+        let pattern = "^\\s*<(ul|ol)(\\s[^>]*)?>\\s*(.*?)\\s*</\\1>\\s*$"
+        guard let outer = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else {
+            return nil
+        }
+        let range = NSRange(location: 0, length: (trimmed as NSString).length)
+        guard let m = outer.firstMatch(in: trimmed, options: [], range: range) else { return nil }
+
+        let tagName = (trimmed as NSString).substring(with: m.range(at: 1)).lowercased()
+        let attrs: String = m.range(at: 2).location != NSNotFound ? (trimmed as NSString).substring(with: m.range(at: 2)) : ""
+        let inner: String = m.range(at: 3).location != NSNotFound ? (trimmed as NSString).substring(with: m.range(at: 3)) : ""
+
+        // Determine list kind and start
+        let kind: ListKind = {
+            if tagName == "ul" { return .bullet }
+            let start = extractOrderedListStart(attrs) ?? 1
+            return .ordered(start: start)
+        }()
+
+        // Extract <li> ... </li> items
+        guard let liRegex = try? NSRegularExpression(pattern: "<li(\\s[^>]*)?>\\s*(.*?)\\s*</li>", options: [.caseInsensitive, .dotMatchesLineSeparators]) else {
+            return nil
+        }
+        var items: [ListItem] = []
+        liRegex.enumerateMatches(in: inner, options: [], range: NSRange(location: 0, length: (inner as NSString).length)) { match, _, _ in
+            guard let match = match else { return }
+            let contentRange = match.range(at: 2)
+            if contentRange.location != NSNotFound {
+                let raw = (inner as NSString).substring(with: contentRange)
+                // Strip simple wrappers like <p>...</p>
+                let stripped = stripOuterPTags(raw)
+                // Convert <br> variants to newlines, then remove remaining tags
+                let withBreaks = replaceHTMLBreaks(within: stripped)
+                let text = removeAllTags(within: withBreaks).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !text.isEmpty {
+                    let para: BlockNode = .paragraph(inlines: [.text(text)])
+                    items.append(ListItem(children: [para]))
+                }
+            }
+        }
+
+        if items.isEmpty { return nil }
+        return .list(kind: kind, items: items)
+    }
+
+    /// Extracts the start attribute from an <ol> opening tag attributes string, if present
+    private func extractOrderedListStart(_ attrs: String) -> Int? {
+        let trimmed = attrs.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        // Match start="N" or start='N' or start=N
+        let patterns = [
+            "start\\s*=\\s*\"(\\d+)\"",
+            "start\\s*=\\s*'(\\d+)'",
+            "start\\s*=\\s*(\\d+)"
+        ]
+        for p in patterns {
+            if let re = try? NSRegularExpression(pattern: p, options: [.caseInsensitive]) {
+                let range = NSRange(location: 0, length: (trimmed as NSString).length)
+                if let m = re.firstMatch(in: trimmed, options: [], range: range), m.numberOfRanges > 1 {
+                    let numStr = (trimmed as NSString).substring(with: m.range(at: 1))
+                    if let n = Int(numStr) { return n }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Replaces <br>, <br/>, <br /> (any case) with newlines
+    private func replaceHTMLBreaks(within s: String) -> String {
+        guard let re = try? NSRegularExpression(pattern: "<\\s*br\\s*/?\\s*>", options: [.caseInsensitive]) else { return s }
+        let range = NSRange(location: 0, length: (s as NSString).length)
+        return re.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: "\n")
+    }
+
+    /// Removes an outer pair of <p>...</p> tags if they wrap the entire string
+    private func stripOuterPTags(_ s: String) -> String {
+        let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let re = try? NSRegularExpression(pattern: "^<p(\\s[^>]*)?>\\s*(.*?)\\s*</p>\\s*$", options: [.caseInsensitive, .dotMatchesLineSeparators]) else { return trimmed }
+        let range = NSRange(location: 0, length: (trimmed as NSString).length)
+        if let m = re.firstMatch(in: trimmed, options: [], range: range), m.numberOfRanges > 2 {
+            return (trimmed as NSString).substring(with: m.range(at: 2))
+        }
+        return trimmed
+    }
+
+    /// Removes all remaining HTML tags
+    private func removeAllTags(within s: String) -> String {
+        guard let re = try? NSRegularExpression(pattern: "<[^>]+>", options: [.caseInsensitive, .dotMatchesLineSeparators]) else { return s }
+        let range = NSRange(location: 0, length: (s as NSString).length)
+        return re.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: "")
     }
 
     private func mapListItem(_ node: UnsafeNode) -> ListItem? {
@@ -299,6 +416,7 @@ private struct CMarkBridge {
             // Convert common <br> variants to a line break; otherwise return as text
             let html = stringOrEmpty(cmark_node_get_literal(node))
             if isHTMLBreak(html) { return .lineBreak }
+            if let image = parseHTMLImage(html) { return image }
             return .text(html)
         case CMARK_NODE_CODE:
             return .code(stringOrEmpty(cmark_node_get_literal(node)))
@@ -438,5 +556,54 @@ private struct CMarkBridge {
             return children.map(inlinePlainText).joined()
         }
     }
+
+    private func parseHTMLImage(_ html: String) -> InlineNode? {
+        let trimmed = html.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let lower = trimmed.lowercased()
+        guard lower.hasPrefix("<img") else { return nil }
+        guard let tagEnd = trimmed.lastIndex(of: ">") else { return nil }
+        let innerStart = trimmed.index(trimmed.startIndex, offsetBy: 4) // after "<img"
+        let inner = trimmed[innerStart..<tagEnd]
+        let content = inner.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        let attributes = parseHTMLAttributes(String(content))
+        guard
+            let src = attributes.first(where: { $0.key.caseInsensitiveCompare("src") == .orderedSame })?.value,
+            let url = URL(string: src)
+        else {
+            return nil
+        }
+
+        let alt = attributes.first(where: { $0.key.caseInsensitiveCompare("alt") == .orderedSame })?.value
+        return .image(url: url, alt: alt)
+    }
+
+    private func parseHTMLAttributes(_ input: String) -> [(key: String, value: String)] {
+        guard !input.isEmpty else { return [] }
+        let pattern = "([A-Za-z_:][-A-Za-z0-9_:.]*)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s\"'<>]+))"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return []
+        }
+        let nsRange = NSRange(location: 0, length: (input as NSString).length)
+        var results: [(String, String)] = []
+        regex.enumerateMatches(in: input, options: [], range: nsRange) { match, _, _ in
+            guard let match, match.numberOfRanges >= 2 else { return }
+            let keyRange = match.range(at: 1)
+            guard keyRange.location != NSNotFound else { return }
+            let key = (input as NSString).substring(with: keyRange)
+            let value: String = {
+                for index in 2..<match.numberOfRanges {
+                    let range = match.range(at: index)
+                    if range.location != NSNotFound {
+                        return (input as NSString).substring(with: range)
+                    }
+                }
+                return ""
+            }()
+            results.append((key, value))
+        }
+        return results
+    }
+
 }
 #endif
