@@ -41,10 +41,8 @@ public struct MarkdownTextView: View {
         }
         
         func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
-            // Respect proposed width; if nil, let SwiftUI drive sizing
-            guard let width = proposal.width else { return nil }
-            let size = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-            return CGSize(width: width, height: size.height)
+            let size = uiView.sizeThatFits(CGSize(width: propposal.width, height: .greatestFiniteMagnitude))
+            return CGSize(width: size.width, height: size.height)
         }
 
         final class Coordinator: NSObject, UITextViewDelegate {
