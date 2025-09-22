@@ -1,3 +1,4 @@
+import SwiftUI
 import UIKit
 
 /// A theme that defines the visual appearance of markdown elements using NSAttributedString attribute dictionaries.
@@ -58,12 +59,15 @@ public struct MarkdownTheme: @unchecked Sendable {
     
     /// Spacing between paragraphs (not part of NSAttributedString)
     public var paragraphSpacing: CGFloat
-    
+
     /// Background color for code blocks and UI elements (not part of NSAttributedString)
     public var secondaryBackgroundColor: UIColor
-    
+
     /// Color for separators and borders (not part of NSAttributedString)
     public var separatorColor: UIColor
+
+    /// Padding applied around the rendered markdown content (not part of NSAttributedString)
+    public var padding: EdgeInsets
     
     // MARK: - Initializer
     
@@ -84,7 +88,8 @@ public struct MarkdownTheme: @unchecked Sendable {
         blockSpacing: CGFloat = 8,
         paragraphSpacing: CGFloat = 4,
         secondaryBackgroundColor: UIColor = .secondarySystemBackground,
-        separatorColor: UIColor = .separator
+        separatorColor: UIColor = .separator,
+        padding: EdgeInsets = EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
     ) {
         self.textAttributes = textAttributes
         self.h1Attributes = h1Attributes
@@ -103,6 +108,7 @@ public struct MarkdownTheme: @unchecked Sendable {
         self.paragraphSpacing = paragraphSpacing
         self.secondaryBackgroundColor = secondaryBackgroundColor
         self.separatorColor = separatorColor
+        self.padding = padding
     }
     
     // MARK: - Convenience Methods

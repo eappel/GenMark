@@ -55,11 +55,12 @@ public struct MarkdownView: View {
                 return parsed
             }
         }()
+        Color.clear.frame(height: theme.padding.top)
         ForEach(Array(doc.blocks.enumerated()), id: \.offset) { _, block in
             BlockRenderer(node: block, theme: theme, customization: customization)
                 .padding(.bottom, theme.blockSpacing)
         }
-        Spacer().frame(height: 1)
+        Color.clear.frame(height: theme.padding.bottom)
             .onChange(of: markdown) { _, newValue in
                 let parser = CMarkParser(options: parserOptions, extensions: extensions)
                 parsed = parser.parse(markdown: newValue)
@@ -108,6 +109,8 @@ private struct BlockRenderer: View {
             customView
         } else {
             BlockContentView(node: node, theme: theme, customization: customization)
+                .padding(.leading, theme.padding.leading)
+                .padding(.trailing, theme.padding.trailing)
         }
     }
 }
