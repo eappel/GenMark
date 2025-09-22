@@ -55,8 +55,8 @@ public struct MarkdownView: View {
                 return parsed
             }
         }()
-        ForEach(doc.blocks.indices, id: \.self) { i in
-            BlockRenderer(node: doc.blocks[i], theme: theme, customization: customization)
+        ForEach(Array(doc.blocks.enumerated()), id: \.offset) { _, block in
+            BlockRenderer(node: block, theme: theme, customization: customization)
                 .padding(.bottom, theme.blockSpacing)
         }
         Spacer().frame(height: 1)
@@ -103,12 +103,156 @@ private struct BlockRenderer: View {
     let theme: MarkdownTheme
     let customization: MarkdownCustomization
 
+    var body: some View {
+        if let customView = customization.blockCustomizer(node, theme) {
+            customView
+        } else {
+            BlockContentView(node: node, theme: theme, customization: customization)
+        }
+    }
+}
+
+private struct BlockContentView: View {
+    let node: BlockNode
+    let theme: MarkdownTheme
+    let customization: MarkdownCustomization
+
     @ViewBuilder
-    private func listMarker(for kind: ListKind, index: Int, checked: Bool?, theme: MarkdownTheme) -> some View {
+    var body: some View {
+        switch node {
+        case .paragraph(let inlines):
+            ParagraphBlockView(inlines: inlines, theme: theme, customization: customization)
+        case .heading(let level, let inlines):
+            HeadingBlockView(level: level, inlines: inlines, theme: theme, customization: customization)
+        case .blockQuote(let children):
+            BlockQuoteBlockView(children: children, theme: theme, customization: customization)
+        case .list(let kind, let items):
+            ListBlockView(kind: kind, items: items, theme: theme, customization: customization)
+        case .codeBlock(_, let code):
+            CodeBlockView(code: code, theme: theme)
+        case .thematicBreak:
+            ThematicBreakView(theme: theme)
+        case .table(let headers, let rows):
+            TableBlockView(headers: headers, rows: rows, theme: theme, customization: customization)
+        case .document(let children):
+            DocumentBlockView(children: children, theme: theme, customization: customization)
+        }
+    }
+}
+
+private struct ParagraphBlockView: View {
+    let inlines: [InlineNode]
+    let theme: MarkdownTheme
+    let customization: MarkdownCustomization
+
+    @ViewBuilder
+    var body: some View {
+        if let image = standaloneImageInfo(from: inlines) {
+            MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
+        } else {
+            let (textInlines, images) = splitTextAndImages(from: inlines)
+            if images.isEmpty {
+                let factory = AttributedTextFactory(theme: theme, customization: customization)
+                let attr = factory.make(from: textInlines)
+                MarkdownTextView(attributedText: attr)
+            } else {
+                VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
+                    if !textInlines.isEmpty {
+                        let factory = AttributedTextFactory(theme: theme, customization: customization)
+                        let attr = factory.make(from: textInlines)
+                        MarkdownTextView(attributedText: attr)
+                    }
+                    ForEach(Array(images.enumerated()), id: \.0) { _, image in
+                        MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct HeadingBlockView: View {
+    let level: Int
+    let inlines: [InlineNode]
+    let theme: MarkdownTheme
+    let customization: MarkdownCustomization
+
+    @ViewBuilder
+    var body: some View {
+        let factory = AttributedTextFactory(theme: theme, customization: customization)
+        let headingAttrs = theme.headingAttributes(for: level)
+        let (textInlines, images) = splitTextAndImages(from: inlines)
+
+        if images.isEmpty {
+            let attr = factory.make(from: textInlines, baseAttributes: headingAttrs)
+            MarkdownTextView(attributedText: attr)
+        } else {
+            VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
+                if !textInlines.isEmpty {
+                    let attr = factory.make(from: textInlines, baseAttributes: headingAttrs)
+                    MarkdownTextView(attributedText: attr)
+                }
+                ForEach(Array(images.enumerated()), id: \.0) { _, image in
+                    MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
+                }
+            }
+        }
+    }
+}
+
+private struct BlockQuoteBlockView: View {
+    let children: [BlockNode]
+    let theme: MarkdownTheme
+    let customization: MarkdownCustomization
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
+            ForEach(Array(children.enumerated()), id: \.offset) { _, child in
+                BlockRenderer(node: child, theme: theme, customization: customization)
+            }
+        }
+        .padding(.leading, 8)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(Color(theme.separatorColor))
+                .frame(width: 2)
+        }
+    }
+}
+
+private struct ListBlockView: View {
+    let kind: ListKind
+    let items: [ListItem]
+    let theme: MarkdownTheme
+    let customization: MarkdownCustomization
+
+    var body: some View {
+        ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                ListMarkerView(kind: kind, index: index, checked: item.checked, theme: theme)
+                    .frame(width: 20, alignment: .trailing)
+                BlockRenderer(node: item.children[0], theme: theme, customization: customization)
+            }
+            ForEach(Array(item.children[1...].enumerated()), id: \.offset) { _, child in
+                BlockRenderer(node: child, theme: theme, customization: customization)
+                    .padding(.leading, 20)
+            }
+        }
+    }
+}
+
+private struct ListMarkerView: View {
+    let kind: ListKind
+    let index: Int
+    let checked: Bool?
+    let theme: MarkdownTheme
+
+    @ViewBuilder
+    var body: some View {
         let textFont = theme.textAttributes[.font] as? UIFont ?? UIFont.systemFont(ofSize: 16)
         let textColor = theme.textAttributes[.foregroundColor] as? UIColor ?? UIColor.label
         let linkColor = theme.linkAttributes[.foregroundColor] as? UIColor ?? UIColor.link
-        
+
         switch kind {
         case .bullet:
             Text("•")
@@ -124,115 +268,62 @@ private struct BlockRenderer: View {
                 .imageScale(.medium)
         }
     }
+}
 
-    @ViewBuilder
+private struct CodeBlockView: View {
+    let code: String
+    let theme: MarkdownTheme
+
     var body: some View {
-        // Check for custom view first
-        if let customView = customization.blockCustomizer(node, theme) {
-            customView
-        } else {
-            // Default rendering
-            defaultView
+        let attr = NSAttributedString(string: code, attributes: theme.codeBlockAttributes)
+        return MarkdownTextView(attributedText: attr)
+            .padding(8)
+            .background(Color(theme.secondaryBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct ThematicBreakView: View {
+    let theme: MarkdownTheme
+
+    var body: some View {
+        Rectangle()
+            .fill(Color(theme.separatorColor))
+            .frame(height: 1)
+    }
+}
+
+private struct TableBlockView: View {
+    let headers: [TableCell]
+    let rows: [[TableCell]]
+    let theme: MarkdownTheme
+    let customization: MarkdownCustomization
+
+    var body: some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: max(headers.count, 1))
+        LazyVGrid(columns: columns, spacing: 0) {
+            ForEach(Array(headers.enumerated()), id: \.0) { index, cell in
+                CellRenderer(cell: cell, theme: theme, customization: customization, isHeader: true)
+                    .id("header-\(index)")
+            }
+            ForEach(Array(rows.enumerated()), id: \.0) { rowIndex, row in
+                ForEach(Array(row.enumerated()), id: \.0) { colIndex, cell in
+                    CellRenderer(cell: cell, theme: theme, customization: customization, isHeader: false)
+                        .id("row-\(rowIndex)-col-\(colIndex)")
+                }
+            }
         }
     }
-    
-    @ViewBuilder
-    private var defaultView: some View {
-        switch node {
-        case .paragraph(let inlines):
-            if let image = standaloneImageInfo(from: inlines) {
-                MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
-            } else {
-                let (textInlines, images) = splitTextAndImages(from: inlines)
-                if images.isEmpty {
-                    let factory = AttributedTextFactory(theme: theme, customization: customization)
-                    let attr = factory.make(from: textInlines)
-                    MarkdownTextView(attributedText: attr)
-                } else {
-                    VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
-                        if !textInlines.isEmpty {
-                            let factory = AttributedTextFactory(theme: theme, customization: customization)
-                            let attr = factory.make(from: textInlines)
-                            MarkdownTextView(attributedText: attr)
-                        }
-                        ForEach(Array(images.enumerated()), id: \.0) { _, image in
-                            MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
-                        }
-                    }
-                }
-            }
-        case .heading(let level, let inlines):
-            let factory = AttributedTextFactory(theme: theme, customization: customization)
-            let headingAttrs = theme.headingAttributes(for: level)
-            let (textInlines, images) = splitTextAndImages(from: inlines)
-            if images.isEmpty {
-                let attr = factory.make(from: textInlines, baseAttributes: headingAttrs)
-                MarkdownTextView(attributedText: attr)
-            } else {
-                VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
-                    if !textInlines.isEmpty {
-                        let attr = factory.make(from: textInlines, baseAttributes: headingAttrs)
-                        MarkdownTextView(attributedText: attr)
-                    }
-                    ForEach(Array(images.enumerated()), id: \.0) { _, image in
-                        MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
-                    }
-                }
-            }
-        case .blockQuote(let children):
-            VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
-                ForEach(children.indices, id: \.self) { i in
-                    BlockRenderer(node: children[i], theme: theme, customization: customization)
-                }
-            }
-            .padding(.leading, 8)
-            .overlay(alignment: .leading) { Rectangle().fill(Color(theme.separatorColor)).frame(width: 2) }
-        case .list(let kind, let items):
-            VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
-                ForEach(items.indices, id: \.self) { idx in
-                    let item = items[idx]
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        // Render the list marker
-                        listMarker(for: kind, index: idx, checked: item.checked, theme: theme)
-                            .frame(minWidth: 20, alignment: .trailing)
-                        
-                        // Render the item content
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(item.children.indices, id: \.self) { j in
-                                BlockRenderer(node: item.children[j], theme: theme, customization: customization)
-                            }
-                        }
-                    }
-                }
-            }
-        case .codeBlock(_, let code):
-            let attr = NSAttributedString(string: code, attributes: theme.codeBlockAttributes)
-            MarkdownTextView(attributedText: attr)
-                .padding(8)
-                .background(Color(theme.secondaryBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-        case .thematicBreak:
-            Rectangle().fill(Color(theme.separatorColor)).frame(height: 1)
-        case .table(let headers, let rows):
-            let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: max(headers.count, 1))
-            LazyVGrid(columns: columns, spacing: 0) {
-                // Render headers with unique IDs
-                ForEach(Array(headers.enumerated()), id: \.0) { index, cell in
-                    CellRenderer(cell: cell, theme: theme, customization: customization, isHeader: true)
-                        .id("header-\(index)")
-                }
-                // Render all row cells with unique IDs combining row and column indices
-                ForEach(Array(rows.enumerated()), id: \.0) { rowIndex, row in
-                    ForEach(Array(row.enumerated()), id: \.0) { colIndex, cell in
-                        CellRenderer(cell: cell, theme: theme, customization: customization, isHeader: false)
-                            .id("row-\(rowIndex)-col-\(colIndex)")
-                    }
-                }
-            }
-        case .document(let children):
-            ForEach(children.indices, id: \.self) { i in
-                BlockRenderer(node: children[i], theme: theme, customization: customization)
-            }
+}
+
+private struct DocumentBlockView: View {
+    let children: [BlockNode]
+    let theme: MarkdownTheme
+    let customization: MarkdownCustomization
+
+    var body: some View {
+        ForEach(Array(children.enumerated()), id: \.offset) { _, child in
+            BlockRenderer(node: child, theme: theme, customization: customization)
         }
     }
 }
