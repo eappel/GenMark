@@ -21,7 +21,7 @@ public struct MarkdownTextView: View {
         func makeCoordinator() -> Coordinator { Coordinator(openURL: openURL) }
 
         func makeUIView(context: Context) -> UITextView {
-            let textView = UITextView()
+            let textView = LinkTextView()
             context.coordinator.prepare(textView: textView)
             return textView
         }
@@ -49,7 +49,7 @@ public struct MarkdownTextView: View {
             return measured
         }
 
-        final class Coordinator: NSObject, UITextViewDelegate {
+        final class Coordinator: NSObject, UITextViewDelegate, LinkTextViewDelegate {
             let openURL: OpenURLAction
             var lastRenderedIdentifier: ObjectIdentifier?
 
@@ -57,7 +57,7 @@ public struct MarkdownTextView: View {
                 self.openURL = openURL
             }
 
-            func prepare(textView: UITextView) {
+            func prepare(textView: LinkTextView) {
                 textView.backgroundColor = .clear
                 textView.isEditable = false
                 textView.isScrollEnabled = false
@@ -69,6 +69,8 @@ public struct MarkdownTextView: View {
                 textView.adjustsFontForContentSizeCategory = false
                 textView.linkTextAttributes = [:]
                 textView.delegate = self
+                textView.linkDelegate = self
+                textView.openURL = openURL
             }
 
             func textView(
@@ -76,8 +78,12 @@ public struct MarkdownTextView: View {
                 shouldInteractWith URL: URL,
                 in characterRange: NSRange
             ) -> Bool {
-                openURL(URL)
+                // hanlded by LinkTextViewDelegate
                 return false
+            }
+            
+            func linkTextView(_ textView: LinkTextView, didTapLink url: URL) {
+                openURL(url)
             }
         }
 
@@ -114,4 +120,61 @@ public struct MarkdownTextView: View {
             }
         }
     }
+}
+
+// Overrides link handling behavior with a tap gesture to remove delay in UITextView native handling
+class LinkTextView: UITextView, UIGestureRecognizerDelegate {
+    var openURL: OpenURLAction?
+    
+    weak var linkDelegate: LinkTextViewDelegate?
+    
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        setup()
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
+    
+    private func setup() {
+        let tapRecognizer = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
+        tapRecognizer.delegate = self
+        self.addGestureRecognizer(tapRecognizer)
+    }
+
+    @objc
+    private func handleTap(_ recognizer: UITapGestureRecognizer) {
+        let point = recognizer.location(in: self)
+        if let textRange = characterRange(at: point) {
+            let startIndex = offset(from: beginningOfDocument, to: textRange.start)
+            handleLink(at: startIndex, in: self)
+            return
+        }
+    }
+    
+    private func handleLink(at index: Int, in textView: UITextView) {
+        guard index >= 0, index < textView.attributedText.length else { return }
+        var effectiveRange = NSRange(location: 0, length: 0)
+        let attrs = textView.attributedText.attributes(at: index, effectiveRange: &effectiveRange)
+        guard let value = attrs[.link] else { return }
+        if let url = value as? URL {
+            openURL?(url)
+        } else if let str = value as? String, let url = URL(string: str) {
+            openURL?(url)
+        }
+    }
+    
+    // Allow our gesture recognizer to work simultaneously with built-in ones
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        return true
+    }
+}
+
+protocol LinkTextViewDelegate: AnyObject {
+    @MainActor func linkTextView(_ textView: LinkTextView, didTapLink url: URL)
 }
