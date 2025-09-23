@@ -60,7 +60,6 @@ public struct MarkdownView: View {
                 return parsed
             }
         }()
-        Color.clear.frame(height: theme.padding.top)
         ForEach(Array(doc.blocks.enumerated()), id: \.offset) { _, block in
             BlockRenderer(
                 node: block,
@@ -70,7 +69,7 @@ public struct MarkdownView: View {
             )
                 .padding(.bottom, theme.blockSpacing)
         }
-        Color.clear.frame(height: theme.padding.bottom)
+        Color.clear.frame(height: 0)
             .onChange(of: markdown) { _, newValue in
                 let parser = CMarkParser(options: parserOptions, extensions: extensions)
                 parsed = parser.parse(markdown: newValue)
