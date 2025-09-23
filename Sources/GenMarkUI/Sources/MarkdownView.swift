@@ -60,7 +60,7 @@ public struct MarkdownView: View {
                 return parsed
             }
         }()
-        ForEach(Array(doc.blocks.enumerated()), id: \.offset) { _, block in
+        ForEach(Array(doc.blocks.enumerated()), id: \.offset) { offset, block in
             BlockRenderer(
                 node: block,
                 theme: theme,
@@ -68,7 +68,7 @@ public struct MarkdownView: View {
                 inlineCustomizer: inlineCustomizer,
                 blockCustomizer: blockCustomizer
             )
-                .padding(.bottom, theme.blockSpacing)
+            .padding(.bottom, offset < doc.blocks.count - 1 ? theme.blockSpacing : 0)
         }
         Color.clear.frame(height: 0)
             .onChange(of: markdown) { _, newValue in
