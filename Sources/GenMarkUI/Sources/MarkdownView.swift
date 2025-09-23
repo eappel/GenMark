@@ -182,30 +182,45 @@ private struct BlockContentView: View {
 }
 
 private struct ParagraphBlockView: View {
-    let inlines: [InlineNode]
-    let theme: MarkdownTheme
-    let inlineCustomizer: MarkdownInlineCustomizer?
+    private enum Content {
+        case imageOnly(URL, String?)
+        case textOnly(NSAttributedString)
+        case textWithImages(text: NSAttributedString?, images: [(url: URL, alt: String?)])
+    }
+
+    private let content: Content
+    private let theme: MarkdownTheme
+
+    init(inlines: [InlineNode], theme: MarkdownTheme, inlineCustomizer: MarkdownInlineCustomizer?) {
+        self.theme = theme
+        if let image = standaloneImageInfo(from: inlines) {
+            self.content = .imageOnly(image.url, image.alt)
+        } else {
+            let (textInlines, images) = splitTextAndImages(from: inlines)
+            let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
+            if images.isEmpty {
+                self.content = .textOnly(factory.make(from: textInlines))
+            } else {
+                let text = textInlines.isEmpty ? nil : factory.make(from: textInlines)
+                self.content = .textWithImages(text: text, images: images)
+            }
+        }
+    }
 
     @ViewBuilder
     var body: some View {
-        if let image = standaloneImageInfo(from: inlines) {
-            MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
-        } else {
-            let (textInlines, images) = splitTextAndImages(from: inlines)
-            if images.isEmpty {
-                let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
-                let attr = factory.make(from: textInlines)
-                MarkdownTextView(attributedText: attr)
-            } else {
-                VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
-                    if !textInlines.isEmpty {
-                        let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
-                        let attr = factory.make(from: textInlines)
-                        MarkdownTextView(attributedText: attr)
-                    }
-                    ForEach(Array(images.enumerated()), id: \.0) { _, image in
-                        MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
-                    }
+        switch content {
+        case .imageOnly(let url, let alt):
+            MarkdownImageView(url: url, altText: alt, sizeHint: nil)
+        case .textOnly(let text):
+            MarkdownTextView(attributedText: text)
+        case .textWithImages(let text, let images):
+            VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
+                if let text {
+                    MarkdownTextView(attributedText: text)
+                }
+                ForEach(Array(images.enumerated()), id: \.0) { _, image in
+                    MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
                 }
             }
         }
@@ -213,25 +228,37 @@ private struct ParagraphBlockView: View {
 }
 
 private struct HeadingBlockView: View {
-    let level: Int
-    let inlines: [InlineNode]
-    let theme: MarkdownTheme
-    let inlineCustomizer: MarkdownInlineCustomizer?
+    private enum Content {
+        case textOnly(NSAttributedString)
+        case textWithImages(text: NSAttributedString?, images: [(url: URL, alt: String?)])
+    }
 
-    @ViewBuilder
-    var body: some View {
+    private let content: Content
+    private let theme: MarkdownTheme
+
+    init(level: Int, inlines: [InlineNode], theme: MarkdownTheme, inlineCustomizer: MarkdownInlineCustomizer?) {
+        self.theme = theme
         let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
         let headingAttrs = theme.headingAttributes(for: level)
         let (textInlines, images) = splitTextAndImages(from: inlines)
 
         if images.isEmpty {
-            let attr = factory.make(from: textInlines, baseAttributes: headingAttrs)
-            MarkdownTextView(attributedText: attr)
+            self.content = .textOnly(factory.make(from: textInlines, baseAttributes: headingAttrs))
         } else {
+            let text = textInlines.isEmpty ? nil : factory.make(from: textInlines, baseAttributes: headingAttrs)
+            self.content = .textWithImages(text: text, images: images)
+        }
+    }
+
+    @ViewBuilder
+    var body: some View {
+        switch content {
+        case .textOnly(let text):
+            MarkdownTextView(attributedText: text)
+        case .textWithImages(let text, let images):
             VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
-                if !textInlines.isEmpty {
-                    let attr = factory.make(from: textInlines, baseAttributes: headingAttrs)
-                    MarkdownTextView(attributedText: attr)
+                if let text {
+                    MarkdownTextView(attributedText: text)
                 }
                 ForEach(Array(images.enumerated()), id: \.0) { _, image in
                     MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
@@ -249,9 +276,9 @@ private struct BlockQuoteBlockView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
-            ForEach(Array(children.enumerated()), id: \.offset) { _, child in
+            ForEach(IdentifiedBlockNode.list(from: children)) { child in
                 BlockRenderer(
-                    node: child,
+                    node: child.node,
                     theme: theme,
                     inlineCustomizer: inlineCustomizer,
                     blockCustomizer: blockCustomizer
@@ -329,12 +356,16 @@ private struct ListMarkerView: View {
 }
 
 private struct CodeBlockView: View {
-    let code: String
-    let theme: MarkdownTheme
+    private let attributed: NSAttributedString
+    private let theme: MarkdownTheme
+
+    init(code: String, theme: MarkdownTheme) {
+        self.theme = theme
+        self.attributed = NSAttributedString(string: code, attributes: theme.codeBlockAttributes)
+    }
 
     var body: some View {
-        let attr = NSAttributedString(string: code, attributes: theme.codeBlockAttributes)
-        return MarkdownTextView(attributedText: attr)
+        MarkdownTextView(attributedText: attributed)
             .padding(8)
             .background(Color(theme.secondaryBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -403,92 +434,110 @@ private struct DocumentBlockView: View {
 }
 
 public struct CellRenderer: View {
-    let cell: TableCell
-    let theme: MarkdownTheme
-    let inlineCustomizer: MarkdownInlineCustomizer?
-    let isHeader: Bool
-    
+    private enum Content {
+        case imageOnly(URL, String?)
+        case textOnly(NSAttributedString)
+        case textWithImages(text: NSAttributedString?, images: [(url: URL, alt: String?)])
+    }
+
+    private let content: Content
+    private let theme: MarkdownTheme
+    private let alignment: NSTextAlignment
+
     public init(
         cell: TableCell,
         theme: MarkdownTheme,
         inlineCustomizer: MarkdownInlineCustomizer?,
         isHeader: Bool
     ) {
-        self.cell = cell
         self.theme = theme
-        self.inlineCustomizer = inlineCustomizer
-        self.isHeader = isHeader
+        self.alignment = {
+            switch cell.alignment {
+            case .left: return .left
+            case .center: return .center
+            case .right: return .right
+            }
+        }()
+
+        if let image = standaloneImageInfo(from: cell.inlines) {
+            self.content = .imageOnly(image.url, image.alt)
+        } else {
+            let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
+            let (textInlines, images) = splitTextAndImages(from: cell.inlines)
+            if images.isEmpty {
+                let text = Self.makeText(
+                    from: textInlines,
+                    factory: factory,
+                    theme: theme,
+                    alignment: alignment,
+                    isHeader: isHeader
+                )
+                self.content = .textOnly(text)
+            } else {
+                let text = textInlines.isEmpty ? nil : Self.makeText(
+                    from: textInlines,
+                    factory: factory,
+                    theme: theme,
+                    alignment: alignment,
+                    isHeader: isHeader
+                )
+                self.content = .textWithImages(text: text, images: images)
+            }
+        }
     }
     
     public var body: some View {
         Group {
-            if let image = standaloneImageInfo(from: cell.inlines) {
-                MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
+            switch content {
+            case .imageOnly(let url, let alt):
+                MarkdownImageView(url: url, altText: alt, sizeHint: nil)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                let (textInlines, images) = splitTextAndImages(from: cell.inlines)
-                if images.isEmpty {
-                    renderText(for: textInlines, isHeader: isHeader)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
-                        if !textInlines.isEmpty {
-                            renderText(for: textInlines, isHeader: isHeader)
-                        }
-                        ForEach(Array(images.enumerated()), id: \.0) { _, image in
-                            MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
-                        }
+            case .textOnly(let text):
+                MarkdownTextView(attributedText: text)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .textWithImages(let text, let images):
+                VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
+                    if let text {
+                        MarkdownTextView(attributedText: text)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ForEach(Array(images.enumerated()), id: \.0) { _, image in
+                        MarkdownImageView(url: image.url, altText: image.alt, sizeHint: nil)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 6)
         .border(.secondary)
     }
-    
-    @ViewBuilder
-    private func renderText(for inlines: [InlineNode], isHeader: Bool) -> some View {
-        let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
+
+    private static func makeText(
+        from inlines: [InlineNode],
+        factory: AttributedTextFactory,
+        theme: MarkdownTheme,
+        alignment: NSTextAlignment,
+        isHeader: Bool
+    ) -> NSAttributedString {
         if isHeader {
             let baseFont = theme.textAttributes[.font] as? UIFont ?? UIFont.systemFont(ofSize: 16)
             let boldFont = boldFont(from: baseFont)
             let attr = factory.make(from: inlines, baseFont: boldFont)
-            let mutable: NSAttributedString = {
-                let mutable = NSMutableAttributedString(attributedString: attr)
-                mutable.addAttribute(
-                    NSAttributedString.Key.paragraphStyle,
-                    value: {
-                        let mutableParagraphStyle = NSMutableParagraphStyle()
-                        mutableParagraphStyle.alignment = cellAlignment
-                        return mutableParagraphStyle
-                    }(),
-                    range: .init(location: 0, length: attr.length)
-                )
-                return mutable
-            }()
-            MarkdownTextView(attributedText: mutable)
+            let mutable = NSMutableAttributedString(attributedString: attr)
+            let style = NSMutableParagraphStyle()
+            style.alignment = alignment
+            mutable.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: attr.length))
+            return mutable
         } else {
-            let attr = factory.make(from: inlines)
-            MarkdownTextView(attributedText: attr)
+            return factory.make(from: inlines)
         }
     }
 
-    /// Creates a bold version of the given font
-    private func boldFont(from font: UIFont) -> UIFont {
+    private static func boldFont(from font: UIFont) -> UIFont {
         let existingTraits = font.fontDescriptor.symbolicTraits
         guard let descriptor = font.fontDescriptor.withSymbolicTraits(existingTraits.union(.traitBold)) else {
             return font
         }
         return UIFont(descriptor: descriptor, size: font.pointSize)
-    }
-    
-    private var cellAlignment: NSTextAlignment {
-        switch cell.alignment {
-        case .left: return .left
-        case .center: return .center
-        case .right: return .right
-        }
     }
 }

@@ -6,8 +6,8 @@ struct ExampleView: View {
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack {
+            List {
+//                VStack {
                     MarkdownView(
                         text
                     )
@@ -36,7 +36,7 @@ struct ExampleView: View {
                         Button("Lists Test") { loadFixture("fixture_lists_test") }
                     }
                 }
-            }
+//            }
         }
     }
 

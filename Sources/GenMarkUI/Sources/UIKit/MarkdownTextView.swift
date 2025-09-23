@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreText
 import GenMarkCore
 
 public struct MarkdownTextView: View {
@@ -27,32 +28,59 @@ public struct MarkdownTextView: View {
         }
 
         func updateUIView(_ uiView: UITextView, context: Context) {
-            if uiView.attributedText != attributedText {
-                print("updateUIView")
+            let identifier = ObjectIdentifier(attributedText)
+            if context.coordinator.lastRenderedIdentifier != identifier {
                 uiView.attributedText = attributedText
+                context.coordinator.lastRenderedIdentifier = identifier
             }
             // Ensure our per-range attributes control link appearance
-            uiView.linkTextAttributes = [:]
+            if uiView.linkTextAttributes.isEmpty == false {
+                uiView.linkTextAttributes = [:]
+            }
         }
         
         func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
-            print("sizeThatFits")
             guard let width = proposal.width else { return nil }
-            let key = SizeCache.Key(width: width, attributedHash: attributedText.hash)
+            let key = SizeCache.Key(width: width, attributedIdentifier: ObjectIdentifier(attributedText))
             if let cached = Self.sizeCache.size(for: key) {
-                print("sizeThatFits.cached")
                 return cached
             }
-            let measured = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-            let size = CGSize(width: measured.width, height: measured.height)
-            Self.sizeCache.insert(size, for: key)
-            print("sizeThatFits.uncached")
-            return size
+            let measured = measure(attributedText: attributedText, width: width)
+            Self.sizeCache.insert(measured, for: key)
+            return measured
+        }
+
+        private func measure(attributedText: NSAttributedString, width: CGFloat) -> CGSize {
+            guard attributedText.length > 0 else {
+                return CGSize(width: width, height: 0)
+            }
+
+            let framesetter = CTFramesetterCreateWithAttributedString(attributedText as CFAttributedString)
+            let constraint = CGSize(width: width, height: .greatestFiniteMagnitude)
+            var fitRange = CFRange()
+            var suggested = CTFramesetterSuggestFrameSizeWithConstraints(
+                framesetter,
+                CFRange(location: 0, length: attributedText.length),
+                nil,
+                constraint,
+                &fitRange
+            )
+            if suggested.width.isFinite == false { suggested.width = width }
+            if suggested.height.isFinite == false { suggested.height = 0 }
+
+            // Clamp width to constraint; include min positive height to avoid zero-height rows
+            suggested.width = min(suggested.width, width)
+            let adjustedHeight = max(ceil(suggested.height), 0)
+            return CGSize(width: ceil(suggested.width), height: adjustedHeight)
         }
 
         final class Coordinator: NSObject, UITextViewDelegate {
             let openURL: OpenURLAction
-            init(openURL: OpenURLAction) { self.openURL = openURL }
+            var lastRenderedIdentifier: ObjectIdentifier?
+
+            init(openURL: OpenURLAction) {
+                self.openURL = openURL
+            }
 
             func prepare(textView: UITextView) {
                 textView.backgroundColor = .clear
@@ -64,6 +92,7 @@ public struct MarkdownTextView: View {
                 textView.textContainer.lineFragmentPadding = 0
                 textView.dataDetectorTypes = []
                 textView.adjustsFontForContentSizeCategory = false
+                textView.linkTextAttributes = [:]
                 textView.delegate = self
             }
 
@@ -101,11 +130,11 @@ public struct MarkdownTextView: View {
 
             struct Key: Hashable {
                 let widthBits: UInt64
-                let attributedHash: Int
+                let attributedIdentifier: ObjectIdentifier
 
-                init(width: CGFloat, attributedHash: Int) {
+                init(width: CGFloat, attributedIdentifier: ObjectIdentifier) {
                     self.widthBits = Double(width).bitPattern
-                    self.attributedHash = attributedHash
+                    self.attributedIdentifier = attributedIdentifier
                 }
             }
         }

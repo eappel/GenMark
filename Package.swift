@@ -35,7 +35,7 @@ let package = Package(
         ),
         .testTarget(
             name: "GenMarkCoreTests",
-            dependencies: ["GenMarkCore"],
+            dependencies: ["GenMarkCore", "GenMarkUI"],
             path: "Tests/GenMarkCoreTests",
             resources: [
                 // Test-only copies of fixtures
