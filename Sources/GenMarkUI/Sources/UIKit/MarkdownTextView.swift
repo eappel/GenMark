@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import CoreText
 import GenMarkCore
 
 public struct MarkdownTextView: View {
@@ -45,33 +44,9 @@ public struct MarkdownTextView: View {
             if let cached = Self.sizeCache.size(for: key) {
                 return cached
             }
-            let measured = measure(attributedText: attributedText, width: width)
+            let measured = uiView.sizeThatFits(.init(width: width, height: .greatestFiniteMagnitude))
             Self.sizeCache.insert(measured, for: key)
             return measured
-        }
-
-        private func measure(attributedText: NSAttributedString, width: CGFloat) -> CGSize {
-            guard attributedText.length > 0 else {
-                return CGSize(width: width, height: 0)
-            }
-
-            let framesetter = CTFramesetterCreateWithAttributedString(attributedText as CFAttributedString)
-            let constraint = CGSize(width: width, height: .greatestFiniteMagnitude)
-            var fitRange = CFRange()
-            var suggested = CTFramesetterSuggestFrameSizeWithConstraints(
-                framesetter,
-                CFRange(location: 0, length: attributedText.length),
-                nil,
-                constraint,
-                &fitRange
-            )
-            if suggested.width.isFinite == false { suggested.width = width }
-            if suggested.height.isFinite == false { suggested.height = 0 }
-
-            // Clamp width to constraint; include min positive height to avoid zero-height rows
-            suggested.width = min(suggested.width, width)
-            let adjustedHeight = max(ceil(suggested.height), 0)
-            return CGSize(width: ceil(suggested.width), height: adjustedHeight)
         }
 
         final class Coordinator: NSObject, UITextViewDelegate {
