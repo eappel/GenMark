@@ -305,26 +305,28 @@ private struct ListBlockView: View {
 
     var body: some View {
         ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                ListMarkerView(kind: kind, index: index, checked: item.checked, theme: theme)
-                    .frame(width: 20, alignment: .trailing)
-                BlockRenderer(
-                    node: item.children[0],
-                    theme: theme,
-                    applyPadding: false,
-                    inlineCustomizer: inlineCustomizer,
-                    blockCustomizer: blockCustomizer
-                )
-            }
-            ForEach(Array(item.children[1...].enumerated()), id: \.offset) { _, child in
-                BlockRenderer(
-                    node: child,
-                    theme: theme,
-                    applyPadding: false,
-                    inlineCustomizer: inlineCustomizer,
-                    blockCustomizer: blockCustomizer
-                )
-                .padding(.leading, 20)
+            if !item.children.isEmpty {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    ListMarkerView(kind: kind, index: index, checked: item.checked, theme: theme)
+                        .frame(width: 20, alignment: .trailing)
+                    BlockRenderer(
+                        node: item.children[0],
+                        theme: theme,
+                        applyPadding: false,
+                        inlineCustomizer: inlineCustomizer,
+                        blockCustomizer: blockCustomizer
+                    )
+                }
+                ForEach(Array(item.children[1...].enumerated()), id: \.offset) { _, child in
+                    BlockRenderer(
+                        node: child,
+                        theme: theme,
+                        applyPadding: false,
+                        inlineCustomizer: inlineCustomizer,
+                        blockCustomizer: blockCustomizer
+                    )
+                    .padding(.leading, 20)
+                }
             }
         }
     }
