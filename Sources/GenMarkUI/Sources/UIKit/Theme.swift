@@ -67,8 +67,9 @@ public struct MarkdownTheme: @unchecked Sendable {
     public var separatorColor: UIColor
 
     /// Padding applied around the rendered markdown content (not part of NSAttributedString)
-    public var padding: EdgeInsets
-    
+    public var leadingPadding: CGFloat
+    public var trailingPadding: CGFloat
+
     // MARK: - Initializer
     
     public init(
@@ -89,7 +90,8 @@ public struct MarkdownTheme: @unchecked Sendable {
         paragraphSpacing: CGFloat = 4,
         secondaryBackgroundColor: UIColor = .secondarySystemBackground,
         separatorColor: UIColor = .separator,
-        padding: EdgeInsets = EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
+        leadingPadding: CGFloat = 0,
+        trailingPadding: CGFloat = 0
     ) {
         self.textAttributes = textAttributes
         self.h1Attributes = h1Attributes
@@ -108,7 +110,8 @@ public struct MarkdownTheme: @unchecked Sendable {
         self.paragraphSpacing = paragraphSpacing
         self.secondaryBackgroundColor = secondaryBackgroundColor
         self.separatorColor = separatorColor
-        self.padding = padding
+        self.leadingPadding = leadingPadding
+        self.trailingPadding = trailingPadding
     }
     
     // MARK: - Convenience Methods

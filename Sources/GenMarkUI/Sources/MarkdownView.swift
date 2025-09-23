@@ -64,6 +64,7 @@ public struct MarkdownView: View {
             BlockRenderer(
                 node: block,
                 theme: theme,
+                applyPadding: true,
                 inlineCustomizer: inlineCustomizer,
                 blockCustomizer: blockCustomizer
             )
@@ -111,6 +112,7 @@ private func splitTextAndImages(from inlines: [InlineNode]) -> (text: [InlineNod
 private struct BlockRenderer: View {
     let node: BlockNode
     let theme: MarkdownTheme
+    let applyPadding: Bool
     let inlineCustomizer: MarkdownInlineCustomizer?
     let blockCustomizer: MarkdownBlockCustomizer?
 
@@ -124,8 +126,8 @@ private struct BlockRenderer: View {
                 inlineCustomizer: inlineCustomizer,
                 blockCustomizer: blockCustomizer
             )
-            .padding(.leading, theme.padding.leading)
-            .padding(.trailing, theme.padding.trailing)
+            .padding(.leading, applyPadding ? theme.leadingPadding : 0)
+            .padding(.trailing, applyPadding ? theme.trailingPadding : 0)
         }
     }
 }
@@ -279,6 +281,7 @@ private struct BlockQuoteBlockView: View {
                 BlockRenderer(
                     node: child,
                     theme: theme,
+                    applyPadding: false,
                     inlineCustomizer: inlineCustomizer,
                     blockCustomizer: blockCustomizer
                 )
@@ -308,6 +311,7 @@ private struct ListBlockView: View {
                 BlockRenderer(
                     node: item.children[0],
                     theme: theme,
+                    applyPadding: false,
                     inlineCustomizer: inlineCustomizer,
                     blockCustomizer: blockCustomizer
                 )
@@ -316,6 +320,7 @@ private struct ListBlockView: View {
                 BlockRenderer(
                     node: child,
                     theme: theme,
+                    applyPadding: false,
                     inlineCustomizer: inlineCustomizer,
                     blockCustomizer: blockCustomizer
                 )
@@ -425,6 +430,7 @@ private struct DocumentBlockView: View {
             BlockRenderer(
                 node: child,
                 theme: theme,
+                applyPadding: false,
                 inlineCustomizer: inlineCustomizer,
                 blockCustomizer: blockCustomizer
             )
