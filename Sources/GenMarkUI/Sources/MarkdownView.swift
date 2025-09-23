@@ -276,9 +276,9 @@ private struct BlockQuoteBlockView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
-            ForEach(IdentifiedBlockNode.list(from: children)) { child in
+            ForEach(Array(children.enumerated()), id: \.offset) { _, child in
                 BlockRenderer(
-                    node: child.node,
+                    node: child,
                     theme: theme,
                     inlineCustomizer: inlineCustomizer,
                     blockCustomizer: blockCustomizer
