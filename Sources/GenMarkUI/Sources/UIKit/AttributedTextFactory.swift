@@ -6,11 +6,14 @@ import GenMarkCore
 @MainActor
 public struct AttributedTextFactory {
     let theme: MarkdownTheme
-    let customization: MarkdownCustomization
-    
-    public init(theme: MarkdownTheme = .systemDefault, customization: MarkdownCustomization = .none) {
+    let inlineCustomizer: MarkdownInlineCustomizer?
+
+    public init(
+        theme: MarkdownTheme = .systemDefault,
+        inlineCustomizer: MarkdownInlineCustomizer? = nil
+    ) {
         self.theme = theme
-        self.customization = customization
+        self.inlineCustomizer = inlineCustomizer
     }
     
     /// Creates an attributed string from inline nodes
@@ -179,7 +182,11 @@ public struct AttributedTextFactory {
     ///   - node: The inline node being customized
     ///   - defaultAttributes: The default attributes before customization
     /// - Returns: Customized attributes or default if no customization applied
-    private func applyCustomization(to node: InlineNode, defaultAttributes: [NSAttributedString.Key: Any]) -> [NSAttributedString.Key: Any] {
-        return customization.inlineCustomizer(node, defaultAttributes) ?? defaultAttributes
+    private func applyCustomization(
+        to node: InlineNode,
+        defaultAttributes: [NSAttributedString.Key: Any]
+    ) -> [NSAttributedString.Key: Any] {
+        guard let inlineCustomizer else { return defaultAttributes }
+        return inlineCustomizer(node, defaultAttributes) ?? defaultAttributes
     }
 }

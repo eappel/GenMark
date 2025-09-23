@@ -5,7 +5,8 @@ import GenMarkCore
 public struct MarkdownView: View {
     private let markdown: String
     private let theme: MarkdownTheme
-    private let customization: MarkdownCustomization
+    private let inlineCustomizer: MarkdownInlineCustomizer?
+    private let blockCustomizer: MarkdownBlockCustomizer?
     private let parserOptions: ParserOptions
     private let extensions: Set<GFMExtension>
     // Test-only flag to compare cached vs. non-cached parsing
@@ -15,14 +16,16 @@ public struct MarkdownView: View {
     public init(
         _ markdown: String,
         theme: MarkdownTheme = .systemDefault,
-        customization: MarkdownCustomization = .none,
+        inlineCustomizer: MarkdownInlineCustomizer? = nil,
+        blockCustomizer: MarkdownBlockCustomizer? = nil,
         parserOptions: ParserOptions = [.smart, .validateUTF8],
         extensions: Set<GFMExtension> = GFMExtension.all,
         disableParsingCacheForTesting: Bool = false
     ) {
         self.markdown = markdown
         self.theme = theme
-        self.customization = customization
+        self.inlineCustomizer = inlineCustomizer
+        self.blockCustomizer = blockCustomizer
         self.parserOptions = parserOptions
         self.extensions = extensions
         self.disableParsingCacheForTesting = disableParsingCacheForTesting
@@ -34,12 +37,14 @@ public struct MarkdownView: View {
     public static func minimal(
         _ markdown: String,
         theme: MarkdownTheme = .systemDefault,
-        customization: MarkdownCustomization = .none
+        inlineCustomizer: MarkdownInlineCustomizer? = nil,
+        blockCustomizer: MarkdownBlockCustomizer? = nil
     ) -> MarkdownView {
         return MarkdownView(
             markdown,
             theme: theme,
-            customization: customization,
+            inlineCustomizer: inlineCustomizer,
+            blockCustomizer: blockCustomizer,
             parserOptions: [],
             extensions: []
         )
@@ -57,7 +62,12 @@ public struct MarkdownView: View {
         }()
         Color.clear.frame(height: theme.padding.top)
         ForEach(Array(doc.blocks.enumerated()), id: \.offset) { _, block in
-            BlockRenderer(node: block, theme: theme, customization: customization)
+            BlockRenderer(
+                node: block,
+                theme: theme,
+                inlineCustomizer: inlineCustomizer,
+                blockCustomizer: blockCustomizer
+            )
                 .padding(.bottom, theme.blockSpacing)
         }
         Color.clear.frame(height: theme.padding.bottom)
@@ -102,15 +112,21 @@ private func splitTextAndImages(from inlines: [InlineNode]) -> (text: [InlineNod
 private struct BlockRenderer: View {
     let node: BlockNode
     let theme: MarkdownTheme
-    let customization: MarkdownCustomization
+    let inlineCustomizer: MarkdownInlineCustomizer?
+    let blockCustomizer: MarkdownBlockCustomizer?
 
     var body: some View {
-        if let customView = customization.blockCustomizer(node, theme) {
+        if let blockCustomizer, let customView = blockCustomizer(node, theme) {
             customView
         } else {
-            BlockContentView(node: node, theme: theme, customization: customization)
-                .padding(.leading, theme.padding.leading)
-                .padding(.trailing, theme.padding.trailing)
+            BlockContentView(
+                node: node,
+                theme: theme,
+                inlineCustomizer: inlineCustomizer,
+                blockCustomizer: blockCustomizer
+            )
+            .padding(.leading, theme.padding.leading)
+            .padding(.trailing, theme.padding.trailing)
         }
     }
 }
@@ -118,27 +134,49 @@ private struct BlockRenderer: View {
 private struct BlockContentView: View {
     let node: BlockNode
     let theme: MarkdownTheme
-    let customization: MarkdownCustomization
+    let inlineCustomizer: MarkdownInlineCustomizer?
+    let blockCustomizer: MarkdownBlockCustomizer?
 
     @ViewBuilder
     var body: some View {
         switch node {
         case .paragraph(let inlines):
-            ParagraphBlockView(inlines: inlines, theme: theme, customization: customization)
+            ParagraphBlockView(inlines: inlines, theme: theme, inlineCustomizer: inlineCustomizer)
         case .heading(let level, let inlines):
-            HeadingBlockView(level: level, inlines: inlines, theme: theme, customization: customization)
+            HeadingBlockView(level: level, inlines: inlines, theme: theme, inlineCustomizer: inlineCustomizer)
         case .blockQuote(let children):
-            BlockQuoteBlockView(children: children, theme: theme, customization: customization)
+            BlockQuoteBlockView(
+                children: children,
+                theme: theme,
+                inlineCustomizer: inlineCustomizer,
+                blockCustomizer: blockCustomizer
+            )
         case .list(let kind, let items):
-            ListBlockView(kind: kind, items: items, theme: theme, customization: customization)
+            ListBlockView(
+                kind: kind,
+                items: items,
+                theme: theme,
+                inlineCustomizer: inlineCustomizer,
+                blockCustomizer: blockCustomizer
+            )
         case .codeBlock(_, let code):
             CodeBlockView(code: code, theme: theme)
         case .thematicBreak:
             ThematicBreakView(theme: theme)
         case .table(let headers, let rows):
-            TableBlockView(headers: headers, rows: rows, theme: theme, customization: customization)
+            TableBlockView(
+                headers: headers,
+                rows: rows,
+                theme: theme,
+                inlineCustomizer: inlineCustomizer
+            )
         case .document(let children):
-            DocumentBlockView(children: children, theme: theme, customization: customization)
+            DocumentBlockView(
+                children: children,
+                theme: theme,
+                inlineCustomizer: inlineCustomizer,
+                blockCustomizer: blockCustomizer
+            )
         }
     }
 }
@@ -146,7 +184,7 @@ private struct BlockContentView: View {
 private struct ParagraphBlockView: View {
     let inlines: [InlineNode]
     let theme: MarkdownTheme
-    let customization: MarkdownCustomization
+    let inlineCustomizer: MarkdownInlineCustomizer?
 
     @ViewBuilder
     var body: some View {
@@ -155,13 +193,13 @@ private struct ParagraphBlockView: View {
         } else {
             let (textInlines, images) = splitTextAndImages(from: inlines)
             if images.isEmpty {
-                let factory = AttributedTextFactory(theme: theme, customization: customization)
+                let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
                 let attr = factory.make(from: textInlines)
                 MarkdownTextView(attributedText: attr)
             } else {
                 VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
                     if !textInlines.isEmpty {
-                        let factory = AttributedTextFactory(theme: theme, customization: customization)
+                        let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
                         let attr = factory.make(from: textInlines)
                         MarkdownTextView(attributedText: attr)
                     }
@@ -178,11 +216,11 @@ private struct HeadingBlockView: View {
     let level: Int
     let inlines: [InlineNode]
     let theme: MarkdownTheme
-    let customization: MarkdownCustomization
+    let inlineCustomizer: MarkdownInlineCustomizer?
 
     @ViewBuilder
     var body: some View {
-        let factory = AttributedTextFactory(theme: theme, customization: customization)
+        let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
         let headingAttrs = theme.headingAttributes(for: level)
         let (textInlines, images) = splitTextAndImages(from: inlines)
 
@@ -206,12 +244,18 @@ private struct HeadingBlockView: View {
 private struct BlockQuoteBlockView: View {
     let children: [BlockNode]
     let theme: MarkdownTheme
-    let customization: MarkdownCustomization
+    let inlineCustomizer: MarkdownInlineCustomizer?
+    let blockCustomizer: MarkdownBlockCustomizer?
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
             ForEach(Array(children.enumerated()), id: \.offset) { _, child in
-                BlockRenderer(node: child, theme: theme, customization: customization)
+                BlockRenderer(
+                    node: child,
+                    theme: theme,
+                    inlineCustomizer: inlineCustomizer,
+                    blockCustomizer: blockCustomizer
+                )
             }
         }
         .padding(.leading, 8)
@@ -227,18 +271,29 @@ private struct ListBlockView: View {
     let kind: ListKind
     let items: [ListItem]
     let theme: MarkdownTheme
-    let customization: MarkdownCustomization
+    let inlineCustomizer: MarkdownInlineCustomizer?
+    let blockCustomizer: MarkdownBlockCustomizer?
 
     var body: some View {
         ForEach(Array(items.enumerated()), id: \.offset) { index, item in
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 ListMarkerView(kind: kind, index: index, checked: item.checked, theme: theme)
                     .frame(width: 20, alignment: .trailing)
-                BlockRenderer(node: item.children[0], theme: theme, customization: customization)
+                BlockRenderer(
+                    node: item.children[0],
+                    theme: theme,
+                    inlineCustomizer: inlineCustomizer,
+                    blockCustomizer: blockCustomizer
+                )
             }
             ForEach(Array(item.children[1...].enumerated()), id: \.offset) { _, child in
-                BlockRenderer(node: child, theme: theme, customization: customization)
-                    .padding(.leading, 20)
+                BlockRenderer(
+                    node: child,
+                    theme: theme,
+                    inlineCustomizer: inlineCustomizer,
+                    blockCustomizer: blockCustomizer
+                )
+                .padding(.leading, 20)
             }
         }
     }
@@ -300,19 +355,29 @@ private struct TableBlockView: View {
     let headers: [TableCell]
     let rows: [[TableCell]]
     let theme: MarkdownTheme
-    let customization: MarkdownCustomization
+    let inlineCustomizer: MarkdownInlineCustomizer?
 
     var body: some View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: max(headers.count, 1))
         LazyVGrid(columns: columns, spacing: 0) {
             ForEach(Array(headers.enumerated()), id: \.0) { index, cell in
-                CellRenderer(cell: cell, theme: theme, customization: customization, isHeader: true)
-                    .id("header-\(index)")
+                CellRenderer(
+                    cell: cell,
+                    theme: theme,
+                    inlineCustomizer: inlineCustomizer,
+                    isHeader: true
+                )
+                .id("header-\(index)")
             }
             ForEach(Array(rows.enumerated()), id: \.0) { rowIndex, row in
                 ForEach(Array(row.enumerated()), id: \.0) { colIndex, cell in
-                    CellRenderer(cell: cell, theme: theme, customization: customization, isHeader: false)
-                        .id("row-\(rowIndex)-col-\(colIndex)")
+                    CellRenderer(
+                        cell: cell,
+                        theme: theme,
+                        inlineCustomizer: inlineCustomizer,
+                        isHeader: false
+                    )
+                    .id("row-\(rowIndex)-col-\(colIndex)")
                 }
             }
         }
@@ -322,11 +387,17 @@ private struct TableBlockView: View {
 private struct DocumentBlockView: View {
     let children: [BlockNode]
     let theme: MarkdownTheme
-    let customization: MarkdownCustomization
+    let inlineCustomizer: MarkdownInlineCustomizer?
+    let blockCustomizer: MarkdownBlockCustomizer?
 
     var body: some View {
         ForEach(Array(children.enumerated()), id: \.offset) { _, child in
-            BlockRenderer(node: child, theme: theme, customization: customization)
+            BlockRenderer(
+                node: child,
+                theme: theme,
+                inlineCustomizer: inlineCustomizer,
+                blockCustomizer: blockCustomizer
+            )
         }
     }
 }
@@ -334,18 +405,18 @@ private struct DocumentBlockView: View {
 public struct CellRenderer: View {
     let cell: TableCell
     let theme: MarkdownTheme
-    let customization: MarkdownCustomization
+    let inlineCustomizer: MarkdownInlineCustomizer?
     let isHeader: Bool
     
     public init(
         cell: TableCell,
         theme: MarkdownTheme,
-        customization: MarkdownCustomization,
+        inlineCustomizer: MarkdownInlineCustomizer?,
         isHeader: Bool
     ) {
         self.cell = cell
         self.theme = theme
-        self.customization = customization
+        self.inlineCustomizer = inlineCustomizer
         self.isHeader = isHeader
     }
     
@@ -379,7 +450,7 @@ public struct CellRenderer: View {
     
     @ViewBuilder
     private func renderText(for inlines: [InlineNode], isHeader: Bool) -> some View {
-        let factory = AttributedTextFactory(theme: theme, customization: customization)
+        let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
         if isHeader {
             let baseFont = theme.textAttributes[.font] as? UIFont ?? UIFont.systemFont(ofSize: 16)
             let boldFont = boldFont(from: baseFont)

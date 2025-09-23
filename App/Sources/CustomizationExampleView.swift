@@ -37,43 +37,40 @@ struct CustomizationExampleView: View {
     private var inlineCustomizedView: some View {
         MarkdownView(
             markdown,
-            customization: .combine(
-                .inline { node, attrs in
-                    // Make all code green
-                    if case .code = node {
-                        var newAttrs = attrs
-                        newAttrs[.foregroundColor] = UIColor.systemGreen
-                        newAttrs[.backgroundColor] = UIColor.systemGreen.withAlphaComponent(0.1)
-                        return newAttrs
-                    }
-                    // Make links red and not underlined
-                    if case .link = node {
-                        var newAttrs = attrs
-                        newAttrs[.foregroundColor] = UIColor.systemRed
-                        newAttrs[.attachment] = UIImage(systemName: "checkmark")
-                        newAttrs[.underlineStyle] = nil
-                        return newAttrs
-                    }
-                    // Make strong text also italic
-                    if case .strong = node {
-                        var newAttrs = attrs
-                        if let font = attrs[.font] as? UIFont {
-                            let descriptor = font.fontDescriptor
-                                .withSymbolicTraits([.traitBold, .traitItalic]) ?? font.fontDescriptor
-                            newAttrs[.font] = UIFont(descriptor: descriptor, size: font.pointSize)
-                        }
-                        return newAttrs
-                    }
-                    return nil
-                },
-                .block { node, theme in
-                    // Custom heading with gradient
-                    if case .table(let headers, let rows) = node {
-                        return AnyView(Rectangle().fill(.orange))
-                    }
-                    return nil
+            inlineCustomizer: { node, attrs in
+                // Make all code green
+                if case .code = node {
+                    var newAttrs = attrs
+                    newAttrs[.foregroundColor] = UIColor.systemGreen
+                    newAttrs[.backgroundColor] = UIColor.systemGreen.withAlphaComponent(0.1)
+                    return newAttrs
                 }
-            )
+                // Make links red and not underlined
+                if case .link = node {
+                    var newAttrs = attrs
+                    newAttrs[.foregroundColor] = UIColor.systemRed
+                    newAttrs[.attachment] = UIImage(systemName: "checkmark")
+                    newAttrs[.underlineStyle] = nil
+                    return newAttrs
+                }
+                // Make strong text also italic
+                if case .strong = node {
+                    var newAttrs = attrs
+                    if let font = attrs[.font] as? UIFont {
+                        let descriptor = font.fontDescriptor
+                            .withSymbolicTraits([.traitBold, .traitItalic]) ?? font.fontDescriptor
+                        newAttrs[.font] = UIFont(descriptor: descriptor, size: font.pointSize)
+                    }
+                    return newAttrs
+                }
+                return nil
+            },
+            blockCustomizer: { node, _ in
+                if case .table = node {
+                    return AnyView(Rectangle().fill(.orange))
+                }
+                return nil
+            }
         )
     }
     
@@ -94,7 +91,7 @@ struct CustomizationExampleView: View {
                     .font(.headline)
                 MarkdownView(
                     markdown,
-                    customization: .block { node, theme in
+                    blockCustomizer: { node, theme in
                         // Custom blockquote rendering
                         if case .blockQuote(_) = node {
                             return AnyView(
@@ -151,39 +148,37 @@ struct CustomizationExampleView: View {
                     .font(.headline)
                 MarkdownView(
                     markdown,
-                    customization: MarkdownCustomization.combine(
-                        .inline { node, attrs in
-                            // Purple emphasis
-                            if case .emphasis = node {
-                                var newAttrs = attrs
-                                newAttrs[.foregroundColor] = UIColor.systemPurple
-                                return newAttrs
-                            }
-                            return nil
-                        },
-                        .block { node, theme in
-                            // Custom heading with gradient
-                            if case .heading(let level, _) = node {
-                                // Extract text content for the gradient heading
-                                let factory = AttributedTextFactory(theme: theme, customization: .none)
-                                let headingAttrs = theme.headingAttributes(for: level)
-                                let attr = factory.make(from: node.inlineContent, baseAttributes: headingAttrs)
-                                return AnyView(
-                                    Text(attr.string)
-                                        .font(.system(size: CGFloat(32 - level * 4), weight: .bold))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: [.blue, .purple],
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                        .padding(.vertical, 4)
-                                )
-                            }
-                            return nil
+                    inlineCustomizer: { node, attrs in
+                        // Purple emphasis
+                        if case .emphasis = node {
+                            var newAttrs = attrs
+                            newAttrs[.foregroundColor] = UIColor.systemPurple
+                            return newAttrs
                         }
-                    )
+                        return nil
+                    },
+                    blockCustomizer: { node, theme in
+                        // Custom heading with gradient
+                        if case .heading(let level, _) = node {
+                            // Extract text content for the gradient heading
+                            let factory = AttributedTextFactory(theme: theme)
+                            let headingAttrs = theme.headingAttributes(for: level)
+                            let attr = factory.make(from: node.inlineContent, baseAttributes: headingAttrs)
+                            return AnyView(
+                                Text(attr.string)
+                                    .font(.system(size: CGFloat(32 - level * 4), weight: .bold))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [.blue, .purple],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .padding(.vertical, 4)
+                            )
+                        }
+                        return nil
+                    }
                 )
                 .border(Color.gray)
             }

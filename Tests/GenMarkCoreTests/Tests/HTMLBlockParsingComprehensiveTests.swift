@@ -145,4 +145,3 @@ final class HTMLBlockParsingComprehensiveTests: XCTestCase {
         XCTAssertEqual(items.count, 2)
     }
 }
-

@@ -27,24 +27,26 @@ public struct MarkdownTextView: View {
         }
 
         func updateUIView(_ uiView: UITextView, context: Context) {
-            uiView.attributedText = attributedText
+            if uiView.attributedText != attributedText {
+                print("updateUIView")
+                uiView.attributedText = attributedText
+            }
             // Ensure our per-range attributes control link appearance
             uiView.linkTextAttributes = [:]
         }
-
-        static func dismantleUIView(_ uiView: UITextView, coordinator: Coordinator) {
-            coordinator.cleanup(textView: uiView)
-        }
         
         func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+            print("sizeThatFits")
             guard let width = proposal.width else { return nil }
             let key = SizeCache.Key(width: width, attributedHash: attributedText.hash)
             if let cached = Self.sizeCache.size(for: key) {
+                print("sizeThatFits.cached")
                 return cached
             }
             let measured = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
             let size = CGSize(width: measured.width, height: measured.height)
             Self.sizeCache.insert(size, for: key)
+            print("sizeThatFits.uncached")
             return size
         }
 
@@ -57,17 +59,12 @@ public struct MarkdownTextView: View {
                 textView.isEditable = false
                 textView.isScrollEnabled = false
                 textView.isSelectable = true
+                textView.delaysContentTouches = false
                 textView.textContainerInset = .zero
                 textView.textContainer.lineFragmentPadding = 0
                 textView.dataDetectorTypes = []
-                textView.adjustsFontForContentSizeCategory = true
+                textView.adjustsFontForContentSizeCategory = false
                 textView.delegate = self
-            }
-
-            func cleanup(textView: UITextView) {
-                textView.attributedText = nil
-                textView.linkTextAttributes = [:]
-                textView.delegate = nil
             }
 
             func textView(

@@ -58,7 +58,7 @@ Notes:
 ## Styling & Customization System
 Two complementary systems for maximum flexibility:
 - **Theme (baseline)**: `MarkdownTheme` using `NSAttributedString.Key` dictionaries for complete transparency in attribute construction
-- **Runtime customization**: `MarkdownCustomization` with closure-based inline and block overrides
+- **Runtime customization**: inline (`MarkdownInlineCustomizer`) and block (`MarkdownBlockCustomizer`) closures passed directly to `MarkdownView`
 
 ### Theme Architecture (NSAttributedString.Key Dictionaries)
 The theme system uses attribute dictionaries directly for transparent and traceable styling:
@@ -76,12 +76,19 @@ public struct MarkdownTheme: @unchecked Sendable {
 ### Runtime Customization System
 Simple closure-based system for node appearance overrides:
 ```swift
-public struct MarkdownCustomization: Sendable {
-    // Inline node customization - modifies NSAttributedString attributes
-    public let inlineCustomizer: @Sendable (InlineNode, [NSAttributedString.Key: Any]) -> [NSAttributedString.Key: Any]?
-    
-    // Block node customization - returns custom SwiftUI views
-    public let blockCustomizer: @Sendable (BlockNode, MarkdownTheme) -> AnyView?
+public typealias MarkdownInlineCustomizer = @MainActor (
+    InlineNode,
+    [NSAttributedString.Key: Any]
+) -> [NSAttributedString.Key: Any]?
+
+public typealias MarkdownBlockCustomizer = @MainActor (
+    BlockNode,
+    MarkdownTheme
+) -> AnyView?
+
+public enum MarkdownCustomizers {
+    public static func combineInline(_ customizers: MarkdownInlineCustomizer...) -> MarkdownInlineCustomizer { /* ... */ }
+    public static func combineBlock(_ customizers: MarkdownBlockCustomizer...) -> MarkdownBlockCustomizer { /* ... */ }
 }
 ```
 
@@ -107,7 +114,8 @@ public struct MarkdownCustomization: Sendable {
 }
 
 // Combined customizations
-MarkdownCustomization.combine(inlineCustomizer, blockCustomizer)
+let mergedInline = MarkdownCustomizers.combineInline(inlineCustomizer)
+let mergedBlock = MarkdownCustomizers.combineBlock(blockCustomizer)
 ```
 
 **Benefits of Dictionary-Based Approach:**
@@ -122,7 +130,8 @@ public struct MarkdownView: View {
   public init(
     _ markdown: String,
     theme: MarkdownTheme = .systemDefault,
-    customization: MarkdownCustomization = .none,
+    inlineCustomizer: MarkdownInlineCustomizer? = nil,
+    blockCustomizer: MarkdownBlockCustomizer? = nil,
     parserOptions: ParserOptions = [.smart, .validateUTF8],  // Standard features enabled by default
     extensions: Set<GFMExtension> = GFMExtension.all  // All extensions enabled by default
   )
@@ -131,7 +140,8 @@ public struct MarkdownView: View {
   public static func minimal(
     _ markdown: String,
     theme: MarkdownTheme = .systemDefault,
-    customization: MarkdownCustomization = .none
+    inlineCustomizer: MarkdownInlineCustomizer? = nil,
+    blockCustomizer: MarkdownBlockCustomizer? = nil
   ) -> MarkdownView
 }
 ```
@@ -312,25 +322,23 @@ MarkdownView(markdownContent, theme: .systemDefault)
 // With customization
 MarkdownView(
     markdownContent,
-    customization: .combine(
-        .inline { node, attrs in
-            // Custom link styling by destination
-            if case .link(let url, _, _) = node, url.host == "internal.myco.com" {
-                var newAttrs = attrs
-                newAttrs[.foregroundColor] = UIColor.systemGreen
-                newAttrs[.underlineStyle] = nil
-                return newAttrs
-            }
-            return nil
-        },
-        .block { node, theme in
-            // Custom heading rendering
-            if case .heading(1, _) = node {
-                return AnyView(CustomGradientHeading(node: node, theme: theme))
-            }
-            return nil
+    inlineCustomizer: { node, attrs in
+        // Custom link styling by destination
+        if case .link(let url, _, _) = node, url.host == "internal.myco.com" {
+            var newAttrs = attrs
+            newAttrs[.foregroundColor] = UIColor.systemGreen
+            newAttrs[.underlineStyle] = nil
+            return newAttrs
         }
-    )
+        return nil
+    },
+    blockCustomizer: { node, theme in
+        // Custom heading rendering
+        if case .heading(1, _) = node {
+            return AnyView(CustomGradientHeading(node: node, theme: theme))
+        }
+        return nil
+    }
 )
 // Consumers handle links via SwiftUI environment
 .environment(\.openURL, OpenURLAction { url in
@@ -345,7 +353,7 @@ MarkdownView(
   - Node model, transforms, caching keys
 - `GenMarkUIKit`
   - `MarkdownTheme` (NSAttributedString.Key dictionary-based theming)
-  - `MarkdownCustomization` (inline and block customization closures)
+  - `MarkdownCustomizers` + closure typealiases for inline/block overrides
   - `AttributedTextFactory` (inline → NSAttributedString with transparent attribute merging)
   - `MarkdownTextView` (UIViewRepresentable)
   - TextKit helpers and measurement cache
@@ -453,7 +461,7 @@ Last updated: December 2024
 - Important: Highlight/mark (==text==) and footnotes are NOT supported by swift-cmark
 - **Styling System Refactored**: Replaced complex result-builder system with simple dictionary-based approach:
   - `MarkdownTheme` now uses NSAttributedString.Key dictionaries directly for complete transparency
-  - `MarkdownCustomization` provides closure-based inline and block overrides
+  - Inline and block overrides provided via `MarkdownInlineCustomizer`/`MarkdownBlockCustomizer` and `MarkdownCustomizers`
   - Removed intermediate TextStyle abstraction for direct attribute manipulation
   - All font modifications use proper UIFontDescriptor trait combining
   - Theme marked `@unchecked Sendable` for thread safety with documented constraints
