@@ -142,6 +142,10 @@ class LinkTextView: UITextView, UIGestureRecognizerDelegate {
         let tapRecognizer = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         tapRecognizer.delegate = self
         self.addGestureRecognizer(tapRecognizer)
+
+        if let dragInteraction = textDragInteraction {
+            dragInteraction.isEnabled = false
+        }
     }
 
     @objc

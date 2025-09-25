@@ -5,8 +5,9 @@ import GenMarkCore
 public struct MarkdownView: View {
     private let markdown: String
     private let theme: MarkdownTheme
-    private let inlineCustomizer: MarkdownInlineCustomizer?
-    private let blockCustomizer: MarkdownBlockCustomizer?
+    private let inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster?
+    private let inlineRenderer: MarkdownInlineRenderer?
+    private let blockRenderer: MarkdownBlockRenderer?
     private let parserOptions: ParserOptions
     private let extensions: Set<GFMExtension>
     // Test-only flag to compare cached vs. non-cached parsing
@@ -16,16 +17,18 @@ public struct MarkdownView: View {
     public init(
         _ markdown: String,
         theme: MarkdownTheme = .systemDefault,
-        inlineCustomizer: MarkdownInlineCustomizer? = nil,
-        blockCustomizer: MarkdownBlockCustomizer? = nil,
+        inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster? = nil,
+        inlineRenderer: MarkdownInlineRenderer? = nil,
+        blockRenderer: MarkdownBlockRenderer? = nil,
         parserOptions: ParserOptions = [.smart, .validateUTF8],
         extensions: Set<GFMExtension> = GFMExtension.all,
         disableParsingCacheForTesting: Bool = false
     ) {
         self.markdown = markdown
         self.theme = theme
-        self.inlineCustomizer = inlineCustomizer
-        self.blockCustomizer = blockCustomizer
+        self.inlineAttributeAdjuster = inlineAttributeAdjuster
+        self.inlineRenderer = inlineRenderer
+        self.blockRenderer = blockRenderer
         self.parserOptions = parserOptions
         self.extensions = extensions
         self.disableParsingCacheForTesting = disableParsingCacheForTesting
@@ -37,14 +40,16 @@ public struct MarkdownView: View {
     public static func minimal(
         _ markdown: String,
         theme: MarkdownTheme = .systemDefault,
-        inlineCustomizer: MarkdownInlineCustomizer? = nil,
-        blockCustomizer: MarkdownBlockCustomizer? = nil
+        inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster? = nil,
+        inlineRenderer: MarkdownInlineRenderer? = nil,
+        blockRenderer: MarkdownBlockRenderer? = nil
     ) -> MarkdownView {
         return MarkdownView(
             markdown,
             theme: theme,
-            inlineCustomizer: inlineCustomizer,
-            blockCustomizer: blockCustomizer,
+            inlineAttributeAdjuster: inlineAttributeAdjuster,
+            inlineRenderer: inlineRenderer,
+            blockRenderer: blockRenderer,
             parserOptions: [],
             extensions: []
         )
@@ -65,10 +70,11 @@ public struct MarkdownView: View {
                 node: block,
                 theme: theme,
                 applyPadding: true,
-                inlineCustomizer: inlineCustomizer,
-                blockCustomizer: blockCustomizer
+                inlineAttributeAdjuster: inlineAttributeAdjuster,
+                inlineRenderer: inlineRenderer,
+                blockRenderer: blockRenderer
             )
-            .padding(.bottom, offset < doc.blocks.count - 1 ? theme.blockSpacing : 0)
+            .padding(.bottom, offset < (doc.blocks.count - 1) ? theme.blockSpacing : 0)
         }
         Color.clear.frame(height: 0)
             .onChange(of: markdown) { _, newValue in
@@ -113,18 +119,20 @@ private struct BlockRenderer: View {
     let node: BlockNode
     let theme: MarkdownTheme
     let applyPadding: Bool
-    let inlineCustomizer: MarkdownInlineCustomizer?
-    let blockCustomizer: MarkdownBlockCustomizer?
+    let inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster?
+    let inlineRenderer: MarkdownInlineRenderer?
+    let blockRenderer: MarkdownBlockRenderer?
 
     var body: some View {
-        if let blockCustomizer, let customView = blockCustomizer(node, theme) {
+        if let blockRenderer, let customView = blockRenderer(node, theme) {
             customView
         } else {
             BlockContentView(
                 node: node,
                 theme: theme,
-                inlineCustomizer: inlineCustomizer,
-                blockCustomizer: blockCustomizer
+                inlineAttributeAdjuster: inlineAttributeAdjuster,
+                inlineRenderer: inlineRenderer,
+                blockRenderer: blockRenderer
             )
             .padding(.leading, applyPadding ? theme.leadingPadding : 0)
             .padding(.trailing, applyPadding ? theme.trailingPadding : 0)
@@ -135,30 +143,44 @@ private struct BlockRenderer: View {
 private struct BlockContentView: View {
     let node: BlockNode
     let theme: MarkdownTheme
-    let inlineCustomizer: MarkdownInlineCustomizer?
-    let blockCustomizer: MarkdownBlockCustomizer?
+    let inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster?
+    let inlineRenderer: MarkdownInlineRenderer?
+    let blockRenderer: MarkdownBlockRenderer?
 
     @ViewBuilder
     var body: some View {
         switch node {
         case .paragraph(let inlines):
-            ParagraphBlockView(inlines: inlines, theme: theme, inlineCustomizer: inlineCustomizer)
+            ParagraphBlockView(
+                inlines: inlines,
+                theme: theme,
+                inlineAttributeAdjuster: inlineAttributeAdjuster,
+                inlineRenderer: inlineRenderer
+            )
         case .heading(let level, let inlines):
-            HeadingBlockView(level: level, inlines: inlines, theme: theme, inlineCustomizer: inlineCustomizer)
+            HeadingBlockView(
+                level: level,
+                inlines: inlines,
+                theme: theme,
+                inlineAttributeAdjuster: inlineAttributeAdjuster,
+                inlineRenderer: inlineRenderer
+            )
         case .blockQuote(let children):
             BlockQuoteBlockView(
                 children: children,
                 theme: theme,
-                inlineCustomizer: inlineCustomizer,
-                blockCustomizer: blockCustomizer
+                inlineAttributeAdjuster: inlineAttributeAdjuster,
+                inlineRenderer: inlineRenderer,
+                blockRenderer: blockRenderer
             )
         case .list(let kind, let items):
             ListBlockView(
                 kind: kind,
                 items: items,
                 theme: theme,
-                inlineCustomizer: inlineCustomizer,
-                blockCustomizer: blockCustomizer
+                inlineAttributeAdjuster: inlineAttributeAdjuster,
+                inlineRenderer: inlineRenderer,
+                blockRenderer: blockRenderer
             )
         case .codeBlock(_, let code):
             CodeBlockView(code: code, theme: theme)
@@ -169,14 +191,16 @@ private struct BlockContentView: View {
                 headers: headers,
                 rows: rows,
                 theme: theme,
-                inlineCustomizer: inlineCustomizer
+                inlineAttributeAdjuster: inlineAttributeAdjuster,
+                inlineRenderer: inlineRenderer
             )
         case .document(let children):
             DocumentBlockView(
                 children: children,
                 theme: theme,
-                inlineCustomizer: inlineCustomizer,
-                blockCustomizer: blockCustomizer
+                inlineAttributeAdjuster: inlineAttributeAdjuster,
+                inlineRenderer: inlineRenderer,
+                blockRenderer: blockRenderer
             )
         }
     }
@@ -192,13 +216,22 @@ private struct ParagraphBlockView: View {
     private let content: Content
     private let theme: MarkdownTheme
 
-    init(inlines: [InlineNode], theme: MarkdownTheme, inlineCustomizer: MarkdownInlineCustomizer?) {
+    init(
+        inlines: [InlineNode],
+        theme: MarkdownTheme,
+        inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster?,
+        inlineRenderer: MarkdownInlineRenderer?
+    ) {
         self.theme = theme
         if let image = standaloneImageInfo(from: inlines) {
             self.content = .imageOnly(image.url, image.alt)
         } else {
             let (textInlines, images) = splitTextAndImages(from: inlines)
-            let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
+            let factory = AttributedTextFactory(
+                theme: theme,
+                inlineAttributeAdjuster: inlineAttributeAdjuster,
+                inlineRenderer: inlineRenderer
+            )
             if images.isEmpty {
                 self.content = .textOnly(factory.make(from: textInlines))
             } else {
@@ -237,9 +270,19 @@ private struct HeadingBlockView: View {
     private let content: Content
     private let theme: MarkdownTheme
 
-    init(level: Int, inlines: [InlineNode], theme: MarkdownTheme, inlineCustomizer: MarkdownInlineCustomizer?) {
+    init(
+        level: Int,
+        inlines: [InlineNode],
+        theme: MarkdownTheme,
+        inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster?,
+        inlineRenderer: MarkdownInlineRenderer?
+    ) {
         self.theme = theme
-        let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
+        let factory = AttributedTextFactory(
+            theme: theme,
+            inlineAttributeAdjuster: inlineAttributeAdjuster,
+            inlineRenderer: inlineRenderer
+        )
         let headingAttrs = theme.headingAttributes(for: level)
         let (textInlines, images) = splitTextAndImages(from: inlines)
 
@@ -272,8 +315,9 @@ private struct HeadingBlockView: View {
 private struct BlockQuoteBlockView: View {
     let children: [BlockNode]
     let theme: MarkdownTheme
-    let inlineCustomizer: MarkdownInlineCustomizer?
-    let blockCustomizer: MarkdownBlockCustomizer?
+    let inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster?
+    let inlineRenderer: MarkdownInlineRenderer?
+    let blockRenderer: MarkdownBlockRenderer?
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.paragraphSpacing) {
@@ -282,8 +326,9 @@ private struct BlockQuoteBlockView: View {
                     node: child,
                     theme: theme,
                     applyPadding: false,
-                    inlineCustomizer: inlineCustomizer,
-                    blockCustomizer: blockCustomizer
+                    inlineAttributeAdjuster: inlineAttributeAdjuster,
+                    inlineRenderer: inlineRenderer,
+                    blockRenderer: blockRenderer
                 )
             }
         }
@@ -300,8 +345,9 @@ private struct ListBlockView: View {
     let kind: ListKind
     let items: [ListItem]
     let theme: MarkdownTheme
-    let inlineCustomizer: MarkdownInlineCustomizer?
-    let blockCustomizer: MarkdownBlockCustomizer?
+    let inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster?
+    let inlineRenderer: MarkdownInlineRenderer?
+    let blockRenderer: MarkdownBlockRenderer?
 
     var body: some View {
         ForEach(Array(items.enumerated()), id: \.offset) { index, item in
@@ -313,8 +359,9 @@ private struct ListBlockView: View {
                         node: item.children[0],
                         theme: theme,
                         applyPadding: false,
-                        inlineCustomizer: inlineCustomizer,
-                        blockCustomizer: blockCustomizer
+                        inlineAttributeAdjuster: inlineAttributeAdjuster,
+                        inlineRenderer: inlineRenderer,
+                        blockRenderer: blockRenderer
                     )
                 }
                 ForEach(Array(item.children[1...].enumerated()), id: \.offset) { _, child in
@@ -322,8 +369,9 @@ private struct ListBlockView: View {
                         node: child,
                         theme: theme,
                         applyPadding: false,
-                        inlineCustomizer: inlineCustomizer,
-                        blockCustomizer: blockCustomizer
+                        inlineAttributeAdjuster: inlineAttributeAdjuster,
+                        inlineRenderer: inlineRenderer,
+                        blockRenderer: blockRenderer
                     )
                     .padding(.leading, 20)
                 }
@@ -392,7 +440,8 @@ private struct TableBlockView: View {
     let headers: [TableCell]
     let rows: [[TableCell]]
     let theme: MarkdownTheme
-    let inlineCustomizer: MarkdownInlineCustomizer?
+    let inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster?
+    let inlineRenderer: MarkdownInlineRenderer?
 
     var body: some View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: max(headers.count, 1))
@@ -401,7 +450,8 @@ private struct TableBlockView: View {
                 CellRenderer(
                     cell: cell,
                     theme: theme,
-                    inlineCustomizer: inlineCustomizer,
+                    inlineAttributeAdjuster: inlineAttributeAdjuster,
+                    inlineRenderer: inlineRenderer,
                     isHeader: true
                 )
                 .id("header-\(index)")
@@ -411,7 +461,8 @@ private struct TableBlockView: View {
                     CellRenderer(
                         cell: cell,
                         theme: theme,
-                        inlineCustomizer: inlineCustomizer,
+                        inlineAttributeAdjuster: inlineAttributeAdjuster,
+                        inlineRenderer: inlineRenderer,
                         isHeader: false
                     )
                     .id("row-\(rowIndex)-col-\(colIndex)")
@@ -424,8 +475,9 @@ private struct TableBlockView: View {
 private struct DocumentBlockView: View {
     let children: [BlockNode]
     let theme: MarkdownTheme
-    let inlineCustomizer: MarkdownInlineCustomizer?
-    let blockCustomizer: MarkdownBlockCustomizer?
+    let inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster?
+    let inlineRenderer: MarkdownInlineRenderer?
+    let blockRenderer: MarkdownBlockRenderer?
 
     var body: some View {
         ForEach(Array(children.enumerated()), id: \.offset) { _, child in
@@ -433,8 +485,9 @@ private struct DocumentBlockView: View {
                 node: child,
                 theme: theme,
                 applyPadding: false,
-                inlineCustomizer: inlineCustomizer,
-                blockCustomizer: blockCustomizer
+                inlineAttributeAdjuster: inlineAttributeAdjuster,
+                inlineRenderer: inlineRenderer,
+                blockRenderer: blockRenderer
             )
         }
     }
@@ -454,7 +507,8 @@ public struct CellRenderer: View {
     public init(
         cell: TableCell,
         theme: MarkdownTheme,
-        inlineCustomizer: MarkdownInlineCustomizer?,
+        inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster?,
+        inlineRenderer: MarkdownInlineRenderer? = nil,
         isHeader: Bool
     ) {
         self.theme = theme
@@ -469,7 +523,11 @@ public struct CellRenderer: View {
         if let image = standaloneImageInfo(from: cell.inlines) {
             self.content = .imageOnly(image.url, image.alt)
         } else {
-            let factory = AttributedTextFactory(theme: theme, inlineCustomizer: inlineCustomizer)
+            let factory = AttributedTextFactory(
+                theme: theme,
+                inlineAttributeAdjuster: inlineAttributeAdjuster,
+                inlineRenderer: inlineRenderer
+            )
             let (textInlines, images) = splitTextAndImages(from: cell.inlines)
             if images.isEmpty {
                 let text = Self.makeText(

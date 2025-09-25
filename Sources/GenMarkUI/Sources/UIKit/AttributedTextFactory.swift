@@ -2,18 +2,21 @@ import UIKit
 import GenMarkCore
 
 /// Factory for creating NSAttributedString instances from inline markdown nodes
-/// Uses the theme's attribute dictionaries directly for transparent and traceable construction
+/// Uses theme attributes and optional customization hooks.
 @MainActor
 public struct AttributedTextFactory {
     let theme: MarkdownTheme
-    let inlineCustomizer: MarkdownInlineCustomizer?
+    let inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster?
+    let inlineRenderer: MarkdownInlineRenderer?
 
     public init(
         theme: MarkdownTheme = .systemDefault,
-        inlineCustomizer: MarkdownInlineCustomizer? = nil
+        inlineAttributeAdjuster: MarkdownInlineAttributeAdjuster? = nil,
+        inlineRenderer: MarkdownInlineRenderer? = nil
     ) {
         self.theme = theme
-        self.inlineCustomizer = inlineCustomizer
+        self.inlineAttributeAdjuster = inlineAttributeAdjuster
+        self.inlineRenderer = inlineRenderer
     }
     
     /// Creates an attributed string from inline nodes
@@ -21,103 +24,134 @@ public struct AttributedTextFactory {
     ///   - inlines: The inline nodes to render
     ///   - baseAttributes: Base attributes to use, defaults to theme.textAttributes if nil
     /// - Returns: Fully attributed string
-    public func make(from inlines: [InlineNode], baseAttributes: [NSAttributedString.Key: Any]? = nil) -> NSAttributedString {
-        let result = NSMutableAttributedString()
+    public func make(
+        from inlines: [InlineNode],
+        baseAttributes: [NSAttributedString.Key: Any]? = nil
+    ) -> NSAttributedString {
         let base = baseAttributes ?? theme.textAttributes
-        appendInlines(inlines, to: result, attributes: base)
-        return result
+        return renderInlines(inlines, attributes: base)
     }
     
-    /// Creates an attributed string with a specific base font (for headings)
+    /// Creates an attributed string with a specific base font
     /// - Parameters:
     ///   - inlines: The inline nodes to render
     ///   - baseFont: The base font to use
     /// - Returns: Fully attributed string
-    public func make(from inlines: [InlineNode], baseFont: UIFont) -> NSAttributedString {
-        let result = NSMutableAttributedString()
+    public func make(
+        from inlines: [InlineNode],
+        baseFont: UIFont
+    ) -> NSAttributedString {
         var base = theme.textAttributes
         base[.font] = baseFont
-        appendInlines(inlines, to: result, attributes: base)
-        return result
+        return renderInlines(inlines, attributes: base)
     }
     
-    // MARK: - Private Implementation
+    // MARK: - Rendering Helpers
     
-    /// Recursively processes inline nodes and appends them to the result
-    /// - Parameters:
-    ///   - inlines: Inline nodes to process
-    ///   - result: Mutable attributed string to append to
-    ///   - attributes: Current attribute context
-    private func appendInlines(_ inlines: [InlineNode], to result: NSMutableAttributedString, attributes: [NSAttributedString.Key: Any]) {
-        for inline in inlines {
-            switch inline {
-            case .text(let text):
-                let finalAttrs = applyCustomization(to: inline, defaultAttributes: attributes)
-                result.append(NSAttributedString(string: text, attributes: finalAttrs))
-                
-            case .emphasis(let children):
-                // Start with theme emphasis, allow customization to override for this wrapper
-                let emphasisBase = applyEmphasis(to: attributes)
-                let emphasisAttrs = applyCustomization(to: .emphasis(children), defaultAttributes: emphasisBase)
-                appendInlines(children, to: result, attributes: emphasisAttrs)
-                
-            case .strong(let children):
-                // Start with theme strong, allow customization to override for this wrapper
-                let strongBase = applyStrong(to: attributes)
-                let strongAttrs = applyCustomization(to: .strong(children), defaultAttributes: strongBase)
-                appendInlines(children, to: result, attributes: strongAttrs)
-                
-            case .strikethrough(let children):
-                // Start with theme strikethrough, allow customization to override for this wrapper
-                let strikeBase = mergeAttributes(base: attributes, adding: theme.strikethroughAttributes)
-                let strikethroughAttrs = applyCustomization(to: .strikethrough(children), defaultAttributes: strikeBase)
-                appendInlines(children, to: result, attributes: strikethroughAttrs)
-                
-            case .code(let code):
-                let codeAttrs = mergeAttributes(base: attributes, adding: theme.codeAttributes)
-                let finalAttrs = applyCustomization(to: inline, defaultAttributes: codeAttrs)
-                result.append(NSAttributedString(string: code, attributes: finalAttrs))
-                
-            case .link(let url, let title, let children):
-                // Start from theme link attributes, then allow customization to override
-                let defaultLinkAttrs = mergeAttributes(base: attributes, adding: theme.linkAttributes)
-                let customizedLinkAttrs = applyCustomization(
-                    to: .link(url: url, title: title, children: children),
-                    defaultAttributes: defaultLinkAttrs
-                )
-
-                let startRange = result.length
-                appendInlines(children, to: result, attributes: customizedLinkAttrs)
-                let range = NSRange(location: startRange, length: result.length - startRange)
-                result.addAttribute(.link, value: url, range: range)
-                
-            case .image(let url, let alt):
-                // For now, render alt text - image loading will be handled separately
-                let altText = alt ?? url.absoluteString
-                let finalAttrs = applyCustomization(to: inline, defaultAttributes: attributes)
-                result.append(NSAttributedString(string: altText, attributes: finalAttrs))
-                
-            case .softBreak:
-                let finalAttrs = applyCustomization(to: inline, defaultAttributes: attributes)
-                result.append(NSAttributedString(string: " ", attributes: finalAttrs))
-                
-            case .lineBreak:
-                let finalAttrs = applyCustomization(to: inline, defaultAttributes: attributes)
-                result.append(NSAttributedString(string: "\n", attributes: finalAttrs))
-                
+    private func renderInline(
+        _ inline: InlineNode,
+        attributes: [NSAttributedString.Key: Any]
+    ) -> NSAttributedString {
+        let plan = makeRenderPlan(for: inline, attributes: attributes)
+        guard let inlineRenderer else {
+            return plan.render(plan.attributes)
+        }
+        return inlineRenderer(inline, plan.attributes) { overrideAttrs in
+            let attrs = overrideAttrs ?? plan.attributes
+            return plan.render(attrs)
+        }
+    }
+    
+    private func makeRenderPlan(
+        for inline: InlineNode,
+        attributes: [NSAttributedString.Key: Any]
+    ) -> InlineRenderPlan {
+        switch inline {
+        case .text(let text):
+            let finalAttrs = applyCustomizationIfNecessary(to: inline, attributes: attributes)
+            return InlineRenderPlan(attributes: finalAttrs) { attrs in
+                NSAttributedString(string: text, attributes: attrs)
+            }
             
+        case .emphasis(let children):
+            let emphasisBase = applyEmphasis(to: attributes)
+            let emphasisAttrs = applyCustomizationIfNecessary(to: inline, attributes: emphasisBase)
+            return InlineRenderPlan(attributes: emphasisAttrs) { childAttrs in
+                renderInlines(children, attributes: childAttrs)
+            }
+            
+        case .strong(let children):
+            let strongBase = applyStrong(to: attributes)
+            let strongAttrs = applyCustomizationIfNecessary(to: inline, attributes: strongBase)
+            return InlineRenderPlan(attributes: strongAttrs) { childAttrs in
+                renderInlines(children, attributes: childAttrs)
+            }
+            
+        case .strikethrough(let children):
+            let strikeBase = mergeAttributes(base: attributes, adding: theme.strikethroughAttributes)
+            let strikethroughAttrs = applyCustomizationIfNecessary(to: inline, attributes: strikeBase)
+            return InlineRenderPlan(attributes: strikethroughAttrs) { childAttrs in
+                renderInlines(children, attributes: childAttrs)
+            }
+            
+        case .code(let code):
+            let codeAttrs = mergeAttributes(base: attributes, adding: theme.codeAttributes)
+            let finalAttrs = applyCustomizationIfNecessary(to: inline, attributes: codeAttrs)
+            return InlineRenderPlan(attributes: finalAttrs) { attrs in
+                NSAttributedString(string: code, attributes: attrs)
+            }
+            
+        case .link(let url, _, let children):
+            let defaultLinkAttrs = mergeAttributes(base: attributes, adding: theme.linkAttributes)
+            let customizedLinkAttrs = applyCustomizationIfNecessary(to: inline, attributes: defaultLinkAttrs)
+            return InlineRenderPlan(attributes: customizedLinkAttrs) { childAttrs in
+                let rendered = renderInlines(children, attributes: childAttrs)
+                if rendered.length > 0 {
+                    let range = NSRange(location: 0, length: rendered.length)
+                    rendered.addAttribute(.link, value: url, range: range)
+                }
+                return rendered
+            }
+            
+        case .image(let url, let alt):
+            let altText = alt ?? url.absoluteString
+            let finalAttrs = applyCustomizationIfNecessary(to: inline, attributes: attributes)
+            return InlineRenderPlan(attributes: finalAttrs) { attrs in
+                NSAttributedString(string: altText, attributes: attrs)
+            }
+            
+        case .softBreak:
+            let finalAttrs = applyCustomizationIfNecessary(to: inline, attributes: attributes)
+            return InlineRenderPlan(attributes: finalAttrs) { attrs in
+                NSAttributedString(string: " ", attributes: attrs)
+            }
+            
+        case .lineBreak:
+            let finalAttrs = applyCustomizationIfNecessary(to: inline, attributes: attributes)
+            return InlineRenderPlan(attributes: finalAttrs) { attrs in
+                NSAttributedString(string: "\n", attributes: attrs)
             }
         }
     }
     
     // MARK: - Attribute Manipulation Helpers
     
-    /// Merges two attribute dictionaries, with the adding dictionary taking precedence
-    /// - Parameters:
-    ///   - base: Base attributes
-    ///   - adding: Additional attributes to merge in
-    /// - Returns: Merged attribute dictionary
-    private func mergeAttributes(base: [NSAttributedString.Key: Any], adding: [NSAttributedString.Key: Any]) -> [NSAttributedString.Key: Any] {
+    private func renderInlines(
+        _ inlines: [InlineNode],
+        attributes: [NSAttributedString.Key: Any]
+    ) -> NSMutableAttributedString {
+        let result = NSMutableAttributedString()
+        for inline in inlines {
+            let rendered = renderInline(inline, attributes: attributes)
+            result.append(rendered)
+        }
+        return result
+    }
+    
+    private func mergeAttributes(
+        base: [NSAttributedString.Key: Any],
+        adding: [NSAttributedString.Key: Any]
+    ) -> [NSAttributedString.Key: Any] {
         var result = base
         for (key, value) in adding {
             result[key] = value
@@ -125,41 +159,26 @@ public struct AttributedTextFactory {
         return result
     }
     
-    /// Applies emphasis (italic) to the given attributes
-    /// This modifies the font to add italic traits while preserving other font characteristics
-    /// - Parameter attributes: Base attributes
-    /// - Returns: Attributes with emphasis applied
-    private func applyEmphasis(to attributes: [NSAttributedString.Key: Any]) -> [NSAttributedString.Key: Any] {
+    private func applyEmphasis(
+        to attributes: [NSAttributedString.Key: Any]
+    ) -> [NSAttributedString.Key: Any] {
         var result = attributes
-        
-        // Apply font trait modification if there's a font
         if let font = attributes[.font] as? UIFont {
             result[.font] = addItalicTrait(to: font)
         }
-        
-        // Merge any additional emphasis attributes from theme
         return mergeAttributes(base: result, adding: theme.emphasisAttributes)
     }
     
-    /// Applies strong (bold) to the given attributes
-    /// This modifies the font to add bold traits while preserving other font characteristics
-    /// - Parameter attributes: Base attributes
-    /// - Returns: Attributes with strong applied
-    private func applyStrong(to attributes: [NSAttributedString.Key: Any]) -> [NSAttributedString.Key: Any] {
+    private func applyStrong(
+        to attributes: [NSAttributedString.Key: Any]
+    ) -> [NSAttributedString.Key: Any] {
         var result = attributes
-        
-        // Apply font trait modification if there's a font
         if let font = attributes[.font] as? UIFont {
             result[.font] = addBoldTrait(to: font)
         }
-        
-        // Merge any additional strong attributes from theme
         return mergeAttributes(base: result, adding: theme.strongAttributes)
     }
     
-    // MARK: - Font Trait Helpers
-    
-    /// Adds italic trait to a font while preserving existing traits
     private func addItalicTrait(to font: UIFont) -> UIFont {
         let existingTraits = font.fontDescriptor.symbolicTraits
         guard let descriptor = font.fontDescriptor.withSymbolicTraits(existingTraits.union(.traitItalic)) else {
@@ -168,7 +187,6 @@ public struct AttributedTextFactory {
         return UIFont(descriptor: descriptor, size: font.pointSize)
     }
     
-    /// Adds bold trait to a font while preserving existing traits
     private func addBoldTrait(to font: UIFont) -> UIFont {
         let existingTraits = font.fontDescriptor.symbolicTraits
         guard let descriptor = font.fontDescriptor.withSymbolicTraits(existingTraits.union(.traitBold)) else {
@@ -177,16 +195,16 @@ public struct AttributedTextFactory {
         return UIFont(descriptor: descriptor, size: font.pointSize)
     }
     
-    /// Applies customization to the given attributes
-    /// - Parameters:
-    ///   - node: The inline node being customized
-    ///   - defaultAttributes: The default attributes before customization
-    /// - Returns: Customized attributes or default if no customization applied
-    private func applyCustomization(
+    private func applyCustomizationIfNecessary(
         to node: InlineNode,
-        defaultAttributes: [NSAttributedString.Key: Any]
+        attributes: [NSAttributedString.Key: Any]
     ) -> [NSAttributedString.Key: Any] {
-        guard let inlineCustomizer else { return defaultAttributes }
-        return inlineCustomizer(node, defaultAttributes) ?? defaultAttributes
+        guard let inlineAttributeAdjuster else { return attributes }
+        return inlineAttributeAdjuster(node, attributes) ?? attributes
     }
+}
+
+private struct InlineRenderPlan {
+    let attributes: [NSAttributedString.Key: Any]
+    let render: ([NSAttributedString.Key: Any]) -> NSAttributedString
 }

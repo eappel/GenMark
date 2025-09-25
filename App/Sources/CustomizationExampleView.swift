@@ -1,6 +1,7 @@
 import SwiftUI
 import GenMarkUI
 import GenMarkCore
+import UIKit
 
 // Helper extension to extract inline content from block nodes
 extension BlockNode {
@@ -37,7 +38,7 @@ struct CustomizationExampleView: View {
     private var inlineCustomizedView: some View {
         MarkdownView(
             markdown,
-            inlineCustomizer: { node, attrs in
+            inlineAttributeAdjuster: { node, attrs in
                 // Make all code green
                 if case .code = node {
                     var newAttrs = attrs
@@ -48,9 +49,9 @@ struct CustomizationExampleView: View {
                 // Make links red and not underlined
                 if case .link = node {
                     var newAttrs = attrs
-                    newAttrs[.foregroundColor] = UIColor.systemRed
-                    newAttrs[.attachment] = UIImage(systemName: "checkmark")
-                    newAttrs[.underlineStyle] = nil
+//                    newAttrs[.foregroundColor] = UIColor.systemRed
+                    newAttrs[.attachment] = NSTextAttachment(image: UIImage(systemName: "checkmark")!)
+//                    newAttrs[.underlineStyle] = nil
                     return newAttrs
                 }
                 // Make strong text also italic
@@ -65,7 +66,7 @@ struct CustomizationExampleView: View {
                 }
                 return nil
             },
-            blockCustomizer: { node, _ in
+            blockRenderer: { node, _ in
                 if case .table = node {
                     return AnyView(Rectangle().fill(.orange))
                 }
@@ -73,25 +74,75 @@ struct CustomizationExampleView: View {
             }
         )
     }
+
+    @ViewBuilder
+    private var inlineRendererView: some View {
+        MarkdownView(
+            markdown,
+            inlineRenderer: { node, attributes, render in
+                guard case let .link(url, _, _) = node else {
+                    return render(nil)
+                }
+
+                let renderer = ImageRenderer(content: MySwiftUIView())
+
+                guard let image = renderer.uiImage else {
+                    return render(nil)
+                }
+
+                let attachment = image.asTextAttachment()
+                if let font = attributes[.font] as? UIFont {
+                    attachment.bounds = CGRect(
+                        x: 0,
+                        y: font.descender,
+                        width: image.size.width,
+                        height: image.size.height
+                    )
+                }
+
+                var labelAttributes = attributes
+                labelAttributes[.foregroundColor] = UIColor.systemPurple
+                let label = render(labelAttributes)
+
+                let composite = NSMutableAttributedString(attributedString: NSAttributedString(attachment: attachment))
+                composite.append(NSAttributedString(string: " "))
+                composite.append(label)
+                let linkRange = NSRange(location: 0, length: composite.length)
+                composite.addAttribute(.link, value: url, range: linkRange)
+                return composite
+            }
+        )
+    }
     
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("Default Rendering")
                     .font(.headline)
                 MarkdownView(markdown)
                     .border(Color.gray)
+                
+                Spacer().frame(height: 10)
                 
                 Text("With Inline Customization")
                     .font(.headline)
                 inlineCustomizedView
                     .border(Color.gray)
                 
+                Spacer().frame(height: 10)
+
+                Text("With Inline Middleware")
+                    .font(.headline)
+                inlineRendererView
+                    .border(Color.gray)
+                
+                Spacer().frame(height: 10)
+
                 Text("With Block Customization")
                     .font(.headline)
                 MarkdownView(
                     markdown,
-                    blockCustomizer: { node, theme in
+                    blockRenderer: { node, theme in
                         // Custom blockquote rendering
                         if case .blockQuote(_) = node {
                             return AnyView(
@@ -144,11 +195,13 @@ struct CustomizationExampleView: View {
                 )
                 .border(Color.gray)
                 
+                Spacer().frame(height: 10)
+                
                 Text("Combined Customizations")
                     .font(.headline)
                 MarkdownView(
                     markdown,
-                    inlineCustomizer: { node, attrs in
+                    inlineAttributeAdjuster: { node, attrs in
                         // Purple emphasis
                         if case .emphasis = node {
                             var newAttrs = attrs
@@ -157,7 +210,7 @@ struct CustomizationExampleView: View {
                         }
                         return nil
                     },
-                    blockCustomizer: { node, theme in
+                    blockRenderer: { node, theme in
                         // Custom heading with gradient
                         if case .heading(let level, _) = node {
                             // Extract text content for the gradient heading
@@ -185,6 +238,27 @@ struct CustomizationExampleView: View {
             .padding()
         }
         .navigationTitle("Customization Examples")
+    }
+}
+
+// Define a SwiftUI View you want to convert
+struct MySwiftUIView: View {
+    var body: some View {
+        Text("1")
+            .padding(6)
+            .font(.caption)
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(.teal)
+            }
+    }
+}
+
+extension UIImage {
+    func asTextAttachment() -> NSTextAttachment {
+        let textAttachment = NSTextAttachment()
+        textAttachment.image = self
+        return textAttachment
     }
 }
 
