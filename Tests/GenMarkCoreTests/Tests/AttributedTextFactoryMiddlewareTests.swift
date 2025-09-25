@@ -52,9 +52,9 @@ final class AttributedTextFactoryMiddlewareTests: XCTestCase {
     @MainActor
     func testMiddlewareCanAdjustAttributesBeforeDefaultRendering() {
         let expectedColor = UIColor.systemTeal
-        let middleware: MarkdownInlineRenderer = { node, context, render in
+        let middleware: MarkdownInlineRenderer = { node, attributes, render in
             guard case .text = node else { return render(nil) }
-            var updated = context.defaultAttributes
+            var updated = attributes
             updated[.foregroundColor] = expectedColor
             return render(updated)
         }
@@ -81,9 +81,9 @@ final class AttributedTextFactoryMiddlewareTests: XCTestCase {
                 updated[.foregroundColor] = expectedColor
                 return updated
             },
-            inlineRenderer: { node, context, render in
+            inlineRenderer: { node, attributes, render in
                 guard case .text = node else { return render(nil) }
-                let color = context.defaultAttributes[.foregroundColor] as? UIColor
+                let color = attributes[.foregroundColor] as? UIColor
                 XCTAssertEqual(color, expectedColor)
                 return render(nil)
             }
