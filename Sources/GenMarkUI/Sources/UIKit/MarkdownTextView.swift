@@ -27,7 +27,7 @@ public struct MarkdownTextView: View {
         }
 
         func updateUIView(_ uiView: UITextView, context: Context) {
-            let identifier = ObjectIdentifier(attributedText)
+            let identifier = attributedText.hashValue
             if context.coordinator.lastRenderedIdentifier != identifier {
                 uiView.attributedText = attributedText
                 context.coordinator.lastRenderedIdentifier = identifier
@@ -40,7 +40,7 @@ public struct MarkdownTextView: View {
         
         func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
             guard let width = proposal.width else { return nil }
-            let key = SizeCache.Key(width: width, attributedIdentifier: ObjectIdentifier(attributedText))
+            let key = SizeCache.Key(width: width, attributedIdentifier: attributedText.hashValue)
             if let cached = Self.sizeCache.size(for: key) {
                 return cached
             }
@@ -51,7 +51,7 @@ public struct MarkdownTextView: View {
 
         final class Coordinator: NSObject, UITextViewDelegate, LinkTextViewDelegate {
             let openURL: OpenURLAction
-            var lastRenderedIdentifier: ObjectIdentifier?
+            var lastRenderedIdentifier: Int?
 
             init(openURL: OpenURLAction) {
                 self.openURL = openURL
@@ -111,9 +111,9 @@ public struct MarkdownTextView: View {
 
             struct Key: Hashable {
                 let widthBits: UInt64
-                let attributedIdentifier: ObjectIdentifier
+                let attributedIdentifier: Int
 
-                init(width: CGFloat, attributedIdentifier: ObjectIdentifier) {
+                init(width: CGFloat, attributedIdentifier: Int) {
                     self.widthBits = Double(width).bitPattern
                     self.attributedIdentifier = attributedIdentifier
                 }
