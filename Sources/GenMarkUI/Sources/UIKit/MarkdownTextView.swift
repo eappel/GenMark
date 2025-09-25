@@ -151,23 +151,55 @@ class LinkTextView: UITextView, UIGestureRecognizerDelegate {
     @objc
     private func handleTap(_ recognizer: UITapGestureRecognizer) {
         let point = recognizer.location(in: self)
-        if let textRange = characterRange(at: point) {
-            let startIndex = offset(from: beginningOfDocument, to: textRange.start)
-            handleLink(at: startIndex, in: self)
-            return
+        let tapSize = CGSize(width: 14, height: 14)
+        let originX = point.x - (tapSize.width / 2)
+        let originY = point.y - (tapSize.height / 2)
+        let rect = CGRect(origin: .init(x: originX, y: originY), size: tapSize)
+        let tapPoints: [CGPoint] = [
+            point,
+            
+            .init(x: rect.minX, y: rect.minY),
+            .init(x: rect.minX, y: rect.maxY),
+            .init(x: rect.maxX, y: rect.minY),
+            .init(x: rect.maxX, y: rect.maxY),
+            
+            .init(x: rect.midX, y: rect.minY),
+            .init(x: rect.midX, y: rect.maxY),
+            .init(x: rect.minX, y: rect.midY),
+            .init(x: rect.maxX, y: rect.midY),
+        ]
+        for point in tapPoints {
+            if let textRange = characterRange(at: point) {
+                let startIndex = offset(from: beginningOfDocument, to: textRange.start)
+                if handleLink(at: startIndex, in: self) {
+                    return
+                }
+            }
         }
     }
     
-    private func handleLink(at index: Int, in textView: UITextView) {
-        guard index >= 0, index < textView.attributedText.length else { return }
+    private func handleLink(at index: Int, in textView: UITextView) -> Bool {
+        guard index >= 0, index < textView.attributedText.length else { return false }
         var effectiveRange = NSRange(location: 0, length: 0)
         let attrs = textView.attributedText.attributes(at: index, effectiveRange: &effectiveRange)
-        guard let value = attrs[.link] else { return }
-        if let url = value as? URL {
-            openURL?(url)
-        } else if let str = value as? String, let url = URL(string: str) {
-            openURL?(url)
+        if let value = attrs[.customTap] {
+            if let url = value as? URL {
+                openURL?(url)
+                return true
+            } else if let str = value as? String, let url = URL(string: str) {
+                openURL?(url)
+                return true
+            }
+        } else if let value = attrs[.link] {
+            if let url = value as? URL {
+                openURL?(url)
+                return true
+            } else if let str = value as? String, let url = URL(string: str) {
+                openURL?(url)
+                return true
+            }
         }
+        return false
     }
     
     // Allow our gesture recognizer to work simultaneously with built-in ones
@@ -181,4 +213,8 @@ class LinkTextView: UITextView, UIGestureRecognizerDelegate {
 
 protocol LinkTextViewDelegate: AnyObject {
     @MainActor func linkTextView(_ textView: LinkTextView, didTapLink url: URL)
+}
+
+extension NSAttributedString.Key {
+    public static let customTap: NSAttributedString.Key = .init("genmark.tap")
 }
